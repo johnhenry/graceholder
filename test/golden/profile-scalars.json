@@ -1,0 +1,47 @@
+{
+  "name": "profile-scalars",
+  "header": {
+    "locale": "en",
+    "keyScheme": "gh1"
+  },
+  "input": {
+    "query": "{\n  user(id: 5) {\n    id isAdmin age price createdAt birthday email url avatarUrl phone status role title company city state country zip street address uuid ip sku color currency locale language slug description\n  }\n}",
+    "options": {
+      "seed": "profile",
+      "anchorDate": "2024-06-30T12:00:00.000Z"
+    }
+  },
+  "output": {
+    "user": {
+      "id": "1",
+      "isAdmin": true,
+      "age": 26,
+      "price": 242.99,
+      "createdAt": "2023-08-11T01:36:25.215Z",
+      "birthday": "1954-10-17T04:52:00.187Z",
+      "email": "omar.olsen@example.com",
+      "url": "https://mail.example.com/officia-sunt",
+      "avatarUrl": "https://images.example.org/2c862eb55dba.png",
+      "phone": "(479) 555-0182",
+      "status": "resolved",
+      "role": "admin",
+      "title": "Product Manager",
+      "company": "Willow Works",
+      "city": "Dover",
+      "state": "Georgia",
+      "country": "United States",
+      "zip": "L8P 6Q3",
+      "street": "1079 Pine Rd",
+      "address": "1998 Railroad St, Arlington, VA 22261",
+      "uuid": "5c402b88-387d-408a-b094-15ae596ce0a7",
+      "ip": "119.39.34.51",
+      "sku": "LWK-60230",
+      "color": "gray",
+      "currency": "SEK",
+      "locale": "pt-BR",
+      "language": "German",
+      "slug": "animi-deserunt-anim",
+      "description": "Occaecat omnis ex id sed atque accusantium sed amet aliqua excepturi aute."
+    }
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "name": "variables-fragments-aliases",
+  "header": {
+    "locale": "en",
+    "keyScheme": "gh1"
+  },
+  "input": {
+    "query": "query Team($withBio: Boolean = true) {\n  crew: people { __typename ...Card }\n  boss: manager { ...Card }\n}\nfragment Card on Person {\n  id\n  fullName: name\n  handle: username\n  bio @include(if: $withBio)\n}",
+    "options": {
+      "seed": "team",
+      "variables": {
+        "withBio": false
+      }
+    }
+  },
+  "output": {
+    "crew": [
+      {
+        "__typename": "Person",
+        "id": "1",
+        "fullName": "Hana Lindqvist",
+        "handle": "grace.bennett"
+      },
+      {
+        "__typename": "Person",
+        "id": "2",
+        "fullName": "Carlos Rossi",
+        "handle": "emeka11"
+      },
+      {
+        "__typename": "Person",
+        "id": "3",
+        "fullName": "Alan Ibarra",
+        "handle": "ahartley"
+      }
+    ],
+    "boss": {
+      "id": "1",
+      "fullName": "Hana Lindqvist",
+      "handle": "grace.bennett"
+    }
+  }
+}
