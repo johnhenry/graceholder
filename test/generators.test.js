@@ -1,12 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { generate, GENERATOR_NAMES } from "../src/generators.js";
+import { generate, GENERATOR_NAMES, GRAPH_GENERATORS, asciiFold } from "../src/generators.js";
+import { keyStream } from "../src/key.js";
 import { Stream } from "../src/rng.js";
 import { GraceholderError } from "../src/errors.js";
 
 const ANCHOR = Date.parse("2025-01-01T00:00:00.000Z");
 const ctxFor = (i, args = {}, extra = {}) => ({
   stream: new Stream(BigInt(i) * 0x9e3779b97f4a7c15n + 1n),
+  slot: (name) => keyStream({ seed: i, scope: "p", typeName: "T", entityKey: "7", fieldName: name }),
   anchorMs: ANCHOR,
   args,
   typeName: "Thing",
@@ -17,7 +19,7 @@ const ctxFor = (i, args = {}, extra = {}) => ({
 const many = (name, args, n = 60) => Array.from({ length: n }, (_, i) => generate(name, ctxFor(i, args)));
 
 test("every generator is pure: same stream state, same value", () => {
-  for (const name of GENERATOR_NAMES) {
+  for (const name of GENERATOR_NAMES.filter((n) => !GRAPH_GENERATORS.includes(n))) {
     const args = name === "oneOf" ? { values: ["a", "b", "c"] } : name === "pattern" ? { p: "AA-##" } : {};
     assert.deepEqual(generate(name, ctxFor(3, args)), generate(name, ctxFor(3, args)), name);
   }
@@ -72,24 +74,24 @@ test("text: word, words, sentence, paragraph, title, slug, lorem", () => {
 });
 
 test("person.*", () => {
-  for (const v of many("person.first")) assert.match(v, /^[A-Z][a-z]+$/);
-  for (const v of many("person.last")) assert.match(v, /^[A-Z][a-z]+$/);
-  for (const v of many("person.full")) assert.match(v, /^[A-Z][a-z]+ [A-Z][a-z]+$/);
-  for (const v of many("person.username")) assert.match(v, /^[a-z]+([._]?[a-z0-9]+)?$/);
-  for (const v of many("person.email")) assert.match(v, /^[a-z]+\.[a-z]+@[a-z.]+\.(com|org|net)$/);
+  for (const v of many("person.first")) assert.match(v, /^\p{Lu}\p{L}+$/u);
+  for (const v of many("person.last")) assert.match(v, /^\p{Lu}\p{L}+$/u);
+  for (const v of many("person.full")) assert.match(v, /^\p{Lu}\p{L}+ \p{Lu}\p{L}+$/u);
+  for (const v of many("person.username")) assert.match(v, /^[a-z0-9.]+$/);
+  for (const v of many("person.email")) assert.match(v, /^[a-z0-9.]+@[a-z.]+\.(com|org|net)$/);
   for (const v of many("person.phone")) assert.match(v, /^\(\d{3}\) 555-01\d{2}$/);
   for (const v of many("person.jobTitle")) assert.match(v, /^[A-Z][A-Za-z ]+$/);
   for (const v of many("person.bio")) assert.match(v, /\.$/);
 });
 
 test("company, product and place", () => {
-  for (const v of many("company.name")) assert.match(v, /^[A-Z][a-z]+ [A-Z][a-z]+$/);
-  for (const v of many("product.name")) assert.match(v, /^[A-Z][a-z]+ [A-Z][a-z]+$/);
-  for (const v of many("place.city")) assert.match(v, /^[A-Z][a-z]+$/);
+  for (const v of many("company.name")) assert.match(v, /^\p{Lu}\p{L}+ \p{Lu}\p{L}+$/u);
+  for (const v of many("product.name")) assert.match(v, /^\p{Lu}\p{L}+ \p{Lu}\p{L}+$/u);
+  for (const v of many("place.city")) assert.match(v, /^\p{Lu}\p{L}+$/u);
   for (const v of many("place.state")) assert.match(v, /^[A-Z][A-Za-z ]+$/);
   for (const v of many("place.country")) assert.ok(["United States", "Canada"].includes(v));
   for (const v of many("place.zip")) assert.match(v, /^([0-9]{5}|[A-Z][0-9][A-Z] [0-9][A-Z][0-9])$/);
-  for (const v of many("place.street")) assert.match(v, /^[1-9][0-9]* [A-Z][a-z]+ [A-Z][a-z]+$/);
+  for (const v of many("place.street")) assert.match(v, /^[1-9][0-9]* \p{Lu}\p{L}+ \p{Lu}\p{L}+$/u);
   for (const v of many("place.address")) assert.match(v, /^[1-9][0-9]* .+, .+, [A-Z]{2} .+$/);
 });
 
@@ -126,5 +128,28 @@ test("choice: oneOf (values and vocab) and pattern", () => {
 test("generator names are exposed for the 'did you mean' hint", () => {
   for (const n of ["int", "person.first", "datetime", "id.uuid", "pattern", "oneOf", "words", "sentence"]) {
     assert.ok(GENERATOR_NAMES.includes(n), n);
+  }
+});
+
+test("persona generators read slots: same slots, same persona", () => {
+  const a = (name) => generate(name, ctxFor(4));
+  assert.equal(a("person.full"), `${a("person.first")} ${a("person.last")}`);
+  const email = a("person.email");
+  assert.ok(email.includes(asciiFold(a("person.first"))) && email.includes(asciiFold(a("person.last"))));
+  assert.equal(a("place.address").includes(a("place.city")), true);
+  assert.equal(a("place.address").includes(a("place.street")), true);
+  assert.equal(a("place.address").endsWith(a("place.zip")), true);
+  assert.equal(a("company.domain"), `${a("company.name").split(" ")[0].toLowerCase()}.example.com`);
+});
+
+test("time.*: created <= updated <= anchor, deleted is null by default", () => {
+  for (let i = 0; i < 100; i++) {
+    const c = Date.parse(generate("time.created", ctxFor(i)));
+    const u = Date.parse(generate("time.updated", ctxFor(i)));
+    const p = Date.parse(generate("time.published", ctxFor(i)));
+    assert.ok(c <= u && u <= ANCHOR && c <= p && p <= ANCHOR);
+    assert.equal(generate("time.deleted", ctxFor(i)), null);
+    const d = generate("time.deleted", ctxFor(i, { nullRate: 0 }));
+    assert.ok(Date.parse(d) >= u && Date.parse(d) <= ANCHOR);
   }
 });

@@ -36,7 +36,7 @@ export function graceholder(query, options = {}) {
     }
     const ms = anchorMs(options.anchorDate ?? DEFAULT_ANCHOR);
     const inferred = infer(query, { operationName: options.operationName });
-    const result = run(inferred, { seed: options.seed ?? DEFAULT_SEED, anchorMs: ms, variables: options.variables });
+    const result = run(inferred, { seed: options.seed ?? DEFAULT_SEED, anchorMs: ms, locale, variables: options.variables });
     if (result.errors?.length) {
       // an error raised by one of our resolvers (bad cursor, bad arguments) keeps its own code
       const own = result.errors.find((e) => e.originalError instanceof GraceholderError);

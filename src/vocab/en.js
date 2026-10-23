@@ -16,6 +16,7 @@ export const en = freeze({
     "Olga", "Omar", "Priya", "Quentin", "Rafael", "Rosa", "Sana", "Samuel", "Tessa", "Theo",
     "Uma", "Victor", "Wanda", "Wei", "Xavier", "Yara", "Yusuf", "Zara", "Zoe", "Ibrahim",
     "Harriet", "Ngozi", "Tomas", "Sofia",
+    "Jos\u00e9", "Zo\u00eb", "S\u00f8ren", "Ren\u00e9e", "\u00c5sa", "Chlo\u00e9",
   ],
   lastNames: [
     "Abbott", "Adeyemi", "Alvarez", "Andersson", "Bauer", "Bennett", "Brooks", "Castillo", "Chen", "Cohen",
@@ -25,6 +26,7 @@ export const en = freeze({
     "Rossi", "Saito", "Santos", "Schmidt", "Silva", "Singh", "Tanaka", "Torres", "Underwood", "Vega",
     "Wagner", "Whitfield", "Wright", "Xu", "Yamamoto", "Young", "Zhang", "Ziegler", "Hartley", "Lindqvist",
     "Okonkwo", "Marchetti", "Delacroix", "Barnes",
+    "M\u00fcller", "\u00c7elik", "N\u00fa\u00f1ez", "\u00d8stergaard", "B\u00e9ranger", "\u0141ukasik",
   ],
   emailDomains: ["example.com", "example.org", "example.net", "mail.example.com", "inbox.example.org"],
   tlds: ["com", "org", "net", "io", "dev"],

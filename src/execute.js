@@ -7,6 +7,8 @@ import { xxh64 } from "./xxh64.js";
 import { generate } from "./generators.js";
 import { encodeCursor, decodeCursor } from "./cursor.js";
 import { argsKeyOf, entityKeyFromArgs } from "./args.js";
+import { classifyScalar } from "./rules.js";
+import { tokenize } from "./naming.js";
 
 export const POOL_SIZE = 100;
 export const ENDLESS_TOTAL = 1000;
@@ -70,7 +72,7 @@ export function windowOf(args, n, { connection }) {
 
 /**
  * @param {{ sdl: string, document: any, model: Map<string, Map<string, any>>, abstracts: Map<string, any> }} inferred
- * @param {{ seed: string|number, anchorMs: number, variables?: Record<string, unknown> }} opts
+ * @param {{ seed: string|number, anchorMs: number, locale?: string, variables?: Record<string, unknown> }} opts
  * @returns {import("graphql").ExecutionResult}
  */
 export function run(inferred, opts) {
@@ -83,15 +85,51 @@ export function run(inferred, opts) {
 
   const count = (parent, entityKey, fieldName, argsKey) => keyStream(key("l", parent, entityKey, fieldName, sub(argsKey))).int(3, 10);
 
-  const scalar = (f, parent, entityKey, fieldName, subKeys) =>
-    generate(f.gen, {
+  /** Generate one scalar; `personaKey` is the entity whose persona slots the generator reads. */
+  const scalar = (f, parent, entityKey, fieldName, subKeys, personaKey = entityKey) => {
+    if (f.gen === "count.of") return count(parent, entityKey, f.genArgs.of, "");
+    if (f.gen.startsWith("order.")) return orderMoney(f.gen, parent, entityKey);
+    return generate(f.gen, {
       stream: keyStream(key("e", parent, entityKey, fieldName, subKeys)),
+      slot: (name) => keyStream(key("p", parent, personaKey, name)),
       anchorMs: opts.anchorMs,
       args: f.genArgs,
       typeName: parent,
       entityKey,
       fieldName,
+      locale: opts.locale,
     });
+  };
+
+  const fieldOrDefault = (type, name, alt) => {
+    const fields = inferred.model.get(type);
+    for (const n of [name, alt]) if (n && fields?.has(n)) return fields.get(n);
+    const c = classifyScalar(name, { typeName: type, list: false });
+    return { kind: "scalar", list: false, gen: c.gen, genArgs: c.args };
+  };
+
+  /** subtotal = sum(items price * quantity) over the whole collection; total = subtotal + tax (integer cents). */
+  const orderMoney = (gen, parent, entityKey) => {
+    const itemsField = [...(inferred.model.get(parent)?.values() ?? [])].find(
+      (x) => x.kind === "object" && x.list && !x.synthetic && ["items", "lines"].includes(tokenize(x.name).at(-1)),
+    );
+    // without a selected items field, assume the conventional `items` collection of `Item`
+    const itemsName = itemsField?.name ?? "items";
+    const itemType = itemsField?.typeName ?? "Item";
+    const n = count(parent, entityKey, itemsName, "");
+    const keyOf = memberKeyFn(parent, entityKey, itemsName, "");
+    const price = fieldOrDefault(itemType, "price");
+    const qty = fieldOrDefault(itemType, "quantity", "qty");
+    let subCents = 0;
+    for (let i = 1; i <= n; i++) {
+      const member = keyOf(i);
+      subCents += Math.round(scalar(price, itemType, member, "price") * 100) * scalar(qty, itemType, member, "quantity");
+    }
+    const taxCents = Math.round((subCents * keyStream(key("p", parent, entityKey, "taxRate")).int(0, 12)) / 100);
+    if (gen === "order.subtotal") return subCents / 100;
+    if (gen === "order.tax") return taxCents / 100;
+    return (subCents + taxCents) / 100;
+  };
 
   /** Keys of the members of a collection: shared pool at the top level, owned elsewhere. */
   const memberKeyFn = (parent, entityKey, fieldName, argsKey) => {
@@ -147,7 +185,7 @@ export function run(inferred, opts) {
     if (f.kind === "scalar") {
       if (!f.list) return scalar(f, parent, entityKey, fieldName, sub(argsKey));
       const n = count(parent, entityKey, fieldName, argsKey);
-      return Array.from({ length: n }, (_, i) => scalar(f, parent, entityKey, fieldName, argsKey ? [argsKey, i] : [i]));
+      return Array.from({ length: n }, (_, i) => scalar(f, parent, entityKey, fieldName, argsKey ? [argsKey, i] : [i], `${entityKey}.${fieldName}.${i + 1}`));
     }
     if (f.connection) {
       const conn = collection(f, parent, entityKey, fieldName, args);

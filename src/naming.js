@@ -61,3 +61,14 @@ export function personaKind(typeName) {
   for (const [kind, words] of KINDS) if (tokens.some((t) => words.includes(t))) return kind;
   return "generic";
 }
+
+const PLURALS = new Map([["person", "people"], ["man", "men"], ["woman", "women"], ["child", "children"], ["mouse", "mice"], ["foot", "feet"], ["tooth", "teeth"], ["goose", "geese"]]);
+
+/** Plural of one lowercase word (used to name a collection that is counted but not selected). */
+export function pluralize(word) {
+  const irregular = PLURALS.get(word);
+  if (irregular) return irregular;
+  if (/[^aeiou]y$/.test(word)) return word.slice(0, -1) + "ies";
+  if (/(s|x|z|ch|sh)$/.test(word)) return word + "es";
+  return word + "s";
+}

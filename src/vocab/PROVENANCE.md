@@ -1,6 +1,6 @@
 # Vocabulary provenance
 
-`en.js` is hand-written for this project. Names are common given names and surnames of
+`en.js` is hand-written for this project. Names (including a few accented ones that exercise ASCII folding) are common given names and surnames of
 mixed origin; none is a list copied from a third-party dataset. Places are real, generic
 town names with state/province, ISO-style code and a three-character postal prefix; they
 are not addresses. Lorem words are the classical public-domain ipsum list. Domains use the

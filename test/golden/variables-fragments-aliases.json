@@ -18,26 +18,26 @@
       {
         "__typename": "Person",
         "id": "1",
-        "fullName": "Hana Lindqvist",
-        "handle": "grace.bennett"
+        "fullName": "Maya Marchetti",
+        "handle": "maya.marchetti"
       },
       {
         "__typename": "Person",
         "id": "2",
-        "fullName": "Carlos Rossi",
-        "handle": "emeka11"
+        "fullName": "Renée Lopez",
+        "handle": "rlopez"
       },
       {
         "__typename": "Person",
         "id": "3",
-        "fullName": "Alan Ibarra",
-        "handle": "ahartley"
+        "fullName": "Søren Hansen",
+        "handle": "shansen"
       }
     ],
     "boss": {
       "id": "1",
-      "fullName": "Hana Lindqvist",
-      "handle": "grace.bennett"
+      "fullName": "Maya Marchetti",
+      "handle": "maya.marchetti"
     }
   }
 }

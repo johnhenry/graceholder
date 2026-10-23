@@ -1,0 +1,97 @@
+{
+  "name": "order-totals",
+  "header": {
+    "locale": "en",
+    "keyScheme": "gh1"
+  },
+  "input": {
+    "query": "{\n  orders {\n    id code createdAt\n    items(first: 2) { name price quantity }\n    subtotal tax total\n  }\n}",
+    "options": {
+      "seed": "orders"
+    }
+  },
+  "output": {
+    "orders": [
+      {
+        "id": "1",
+        "code": "ducimus mollit",
+        "createdAt": "2023-07-02T01:19:05.335Z",
+        "items": [
+          {
+            "name": "Portable Mug",
+            "price": 152,
+            "quantity": 2
+          },
+          {
+            "name": "Organic Mug",
+            "price": 483.49,
+            "quantity": 2
+          }
+        ],
+        "subtotal": 5508.72,
+        "tax": 55.09,
+        "total": 5563.81
+      },
+      {
+        "id": "2",
+        "code": "occaecati iste",
+        "createdAt": "2022-03-10T12:39:01.617Z",
+        "items": [
+          {
+            "name": "Modular Blanket",
+            "price": 96,
+            "quantity": 2
+          },
+          {
+            "name": "Handmade Tote",
+            "price": 35.49,
+            "quantity": 7
+          }
+        ],
+        "subtotal": 3948.21,
+        "tax": 355.34,
+        "total": 4303.55
+      },
+      {
+        "id": "3",
+        "code": "rem ea",
+        "createdAt": "2020-12-12T02:23:36.533Z",
+        "items": [
+          {
+            "name": "Premium Toolkit",
+            "price": 221.49,
+            "quantity": 7
+          },
+          {
+            "name": "Ergonomic Planter",
+            "price": 206.99,
+            "quantity": 9
+          }
+        ],
+        "subtotal": 10230.28,
+        "tax": 716.12,
+        "total": 10946.4
+      },
+      {
+        "id": "4",
+        "code": "consequat est",
+        "createdAt": "2023-07-02T10:41:28.180Z",
+        "items": [
+          {
+            "name": "Organic Umbrella",
+            "price": 203.49,
+            "quantity": 6
+          },
+          {
+            "name": "Handmade Toolkit",
+            "price": 47.49,
+            "quantity": 1
+          }
+        ],
+        "subtotal": 2993.31,
+        "tax": 0,
+        "total": 2993.31
+      }
+    ]
+  }
+}
