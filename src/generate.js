@@ -4,17 +4,10 @@ import { run } from "./execute.js";
 import { GraceholderError } from "./errors.js";
 import { LOCALES } from "./vocab/en.js";
 import { resolvePacks } from "./pack-registry.js";
+import { anchorMs, DEFAULT_ANCHOR } from "./anchor.js";
 
 export const DEFAULT_SEED = "graceholder";
-export const DEFAULT_ANCHOR = "2025-01-01T00:00:00.000Z";
-
-export function anchorMs(anchorDate) {
-  const ms = anchorDate instanceof Date ? anchorDate.getTime() : typeof anchorDate === "string" ? Date.parse(anchorDate) : NaN;
-  if (!Number.isFinite(ms)) {
-    throw new GraceholderError("bad-options", `anchorDate must be an ISO date string or a Date, got ${String(anchorDate)}`);
-  }
-  return ms;
-}
+export { DEFAULT_ANCHOR, anchorMs };
 
 export function checkLocale(locale) {
   if (!Object.hasOwn(LOCALES, locale)) {
@@ -54,6 +47,7 @@ export function generateResult(query, options = {}, world = undefined) {
     variables: options.variables,
     nullableTypes: world?.deletedTypes(),
     nullableFields: world?.nullFields(),
+    schema: options.schema,
   });
   const result = run(inferred, {
     seed: options.seed ?? DEFAULT_SEED,

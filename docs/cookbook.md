@@ -248,6 +248,148 @@ console.log({ ids: todos().map((t) => t.id), last: todos().at(-1).title, sameAft
 }
 ```
 
+## Learning a spec from real responses
+
+Save one or more real responses (as `data`) next to the query and let `specFromSamples` turn them into a spec. Nothing is copied but formats and statistics; commit the result and review it.
+
+```js
+import { specFromSamples, analyzeSamples, graceholder } from "@johnhenry/graceholder";
+
+const query = "{ users { name email active plan createdAt tags } }";
+const real = { users: [
+  { name: "Ada Lovelace", email: "ada@analytical.example", active: true, plan: "pro", createdAt: "2021-03-04T10:00:00Z", tags: ["math", "poetry"] },
+  { name: "Alan Turing", email: "alan@bletchley.example", active: false, plan: "free", createdAt: "2022-07-19T12:30:00Z", tags: [] },
+  { name: "Grace Hopper", email: "grace@navy.example", active: true, plan: "pro", createdAt: "2023-01-30T08:15:00Z", tags: ["cobol"] },
+  { name: "Edsger Dijkstra", email: "edsger@tue.example", active: true, plan: "pro", createdAt: "2024-05-02T17:45:00Z", tags: ["graphs", "proofs", "go-to"] },
+] };
+
+const { spec, notes } = analyzeSamples(query, real);
+console.log({ spec, withheld: notes.filter((n) => n.kind === "withheld").map((n) => n.path) });
+```
+
+```json
+{
+  "spec": {
+    "users": {
+      "count": 4
+    },
+    "users.email": {
+      "gen": "person.email"
+    },
+    "users.active": {
+      "gen": {
+        "name": "bool",
+        "args": {
+          "p": 0.75
+        }
+      }
+    },
+    "users.tags": {
+      "count": [
+        0,
+        3
+      ],
+      "gen": {
+        "name": "text",
+        "args": {
+          "min": 4,
+          "max": 6
+        }
+      }
+    }
+  },
+  "withheld": [
+    "users.plan"
+  ]
+}
+```
+
+`plan` is an enumeration, so its values were withheld. Opt in per field (or with `allowValues: true`) when that is fine, then generate:
+
+```js
+import { specFromSamples, graceholder } from "@johnhenry/graceholder";
+
+const query = "{ users { name email active plan createdAt tags } }";
+const real = { users: [
+  { name: "Ada Lovelace", email: "ada@analytical.example", active: true, plan: "pro", createdAt: "2021-03-04T10:00:00Z", tags: ["math", "poetry"] },
+  { name: "Alan Turing", email: "alan@bletchley.example", active: false, plan: "free", createdAt: "2022-07-19T12:30:00Z", tags: [] },
+  { name: "Grace Hopper", email: "grace@navy.example", active: true, plan: "pro", createdAt: "2023-01-30T08:15:00Z", tags: ["cobol"] },
+  { name: "Edsger Dijkstra", email: "edsger@tue.example", active: true, plan: "pro", createdAt: "2024-05-02T17:45:00Z", tags: ["graphs", "proofs", "go-to"] },
+] };
+const spec = specFromSamples(query, real, { allowValues: ["users.plan"] });
+const fake = graceholder(query, { spec, seed: "ci" });
+console.log({ plans: [...new Set(fake.users.map((u) => u.plan))].sort(), users: fake.users.length, copiedNames: JSON.stringify(spec).includes("Lovelace") });
+```
+
+```json
+{
+  "plans": [
+    "free",
+    "pro"
+  ],
+  "users": 4,
+  "copiedNames": false
+}
+```
+
+## Generating against your real schema
+
+Pass the schema (SDL, an introspection result or a graphql-js schema) and the query is validated against it; enums, nullability, lists, custom scalars and unions come from the schema. The same `schema` option makes `specFromSamples` use the schema's enum values and frequencies.
+
+```js
+import { graceholder, specFromSamples } from "@johnhenry/graceholder";
+
+const schema = `
+  scalar DateTime
+  enum Status { OPEN CLOSED }
+  type Ticket { id: ID! title: String! status: Status! closedAt: DateTime assignee: String }
+  type Query { tickets: [Ticket!]! }
+`;
+const query = "{ tickets { id status closedAt } }";
+const spec = specFromSamples(query, { tickets: [
+  { id: "1", status: "OPEN", closedAt: null },
+  { id: "2", status: "OPEN", closedAt: null },
+  { id: "3", status: "CLOSED", closedAt: "2024-12-01T00:00:00Z" },
+] }, { schema });
+const out = graceholder(query, { schema, spec, seed: "t" });
+console.log({ spec, statuses: [...new Set(out.tickets.map((t) => t.status))].sort() });
+```
+
+```json
+{
+  "spec": {
+    "tickets": {
+      "count": 3
+    },
+    "tickets.status": {
+      "pick": [
+        {
+          "value": "OPEN",
+          "weight": 2
+        },
+        {
+          "value": "CLOSED",
+          "weight": 1
+        }
+      ]
+    },
+    "tickets.closedAt": {
+      "nullRate": 0.667,
+      "gen": {
+        "name": "datetime",
+        "args": {
+          "minDaysAgo": 31,
+          "maxDaysAgo": 31
+        }
+      }
+    }
+  },
+  "statuses": [
+    "OPEN"
+  ]
+}
+```
+
 ## Using suggestSpec with a real model
 
 `suggestSpec` takes any async function. With a fetch-based client it looks like this (not run here because it needs a network):

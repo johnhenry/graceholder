@@ -185,6 +185,68 @@ console.log({ sdl, titleDecision: decisions.find((d) => d.path === "posts.title"
 }
 ```
 
+## Learn from real data
+
+`specFromSamples(query, samples, options?)` reads one or more real responses and writes a spec: list sizes, null rates, number ranges, boolean ratios, date ranges, ID formats (`SKU-####`), string lengths and, only when you allow it, enum-like value sets. It needs no LLM and never copies free text. See [docs/api.md](docs/api.md#specfromsamplesquery-samples-options) for the rules and [docs/cookbook.md](docs/cookbook.md#learning-a-spec-from-real-responses) for a worked example.
+
+```js
+import { specFromSamples } from "@johnhenry/graceholder";
+
+const spec = specFromSamples("{ users { id age active } }", { users: [
+  { id: "7", age: 31, active: true },
+  { id: "9", age: 45, active: false },
+  { id: "12", age: 38, active: true },
+] });
+console.log(spec);
+```
+
+```json
+{
+  "users": {
+    "count": 3
+  },
+  "users.age": {
+    "gen": {
+      "name": "int",
+      "args": {
+        "min": 31,
+        "max": 45
+      }
+    }
+  },
+  "users.active": {
+    "gen": {
+      "name": "bool",
+      "args": {
+        "p": 0.667
+      }
+    }
+  }
+}
+```
+
+## Use your real schema
+
+Pass `schema` (SDL, an introspection result or a graphql-js schema) and the query is validated against it. Enums, nullability, lists, custom scalars, connections and unions/interfaces then come from the schema instead of from name heuristics; the entity graph and the determinism guarantee are unchanged. Without `schema`, nothing changes.
+
+```js
+import { graceholder } from "@johnhenry/graceholder";
+
+const schema = "enum Plan { FREE PRO } type Query { account: Account! } type Account { plan: Plan! seats: Int! }";
+console.log(graceholder("{ account { plan seats } }", { schema, seed: "demo" }));
+```
+
+```json
+{
+  "account": {
+    "plan": "PRO",
+    "seats": 44
+  }
+}
+```
+
+Directives and spec entries that contradict the schema throw `schema-conflict`. Details: [docs/api.md](docs/api.md#schema-mode).
+
 ## Suggest a spec with an LLM (authoring time)
 
 `suggestSpec` asks a model you provide to review the inference and return a spec. The core imports no LLM SDK: you pass a function `(prompt) => Promise<string>`. The reply is validated against the query; one repair round is offered; then `bad-suggestion`. Commit the result; generation itself never calls a model.

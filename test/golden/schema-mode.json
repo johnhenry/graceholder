@@ -1,0 +1,167 @@
+{
+  "name": "schema-mode",
+  "header": {
+    "locale": "en",
+    "keyScheme": "gh1"
+  },
+  "input": {
+    "query": "{\n  user(id: 7) { id name role avatar createdAt nickname tags settings { theme } friends @count(n: 2) { id name } }\n  users(role: ADMIN) { id role }\n  pets { __typename name ... on Dog { barks } ... on Cat { lives } }\n  search(q: \"x\") { __typename ... on User { name } ... on Post { title } }\n  posts(first: 2) { totalCount pageInfo { hasNextPage endCursor } edges { cursor node { title author { name } } } }\n}",
+    "options": {
+      "seed": "schema-golden",
+      "schema": "scalar DateTime\nscalar URL\nenum Role { ADMIN EDITOR VIEWER }\ninterface Animal { name: String! }\ntype Dog implements Animal { name: String! barks: Boolean! }\ntype Cat implements Animal { name: String! lives: Int! }\ntype User { id: ID! name: String! role: Role! avatar: URL createdAt: DateTime! nickname: String tags: [String!]! settings: Settings! friends: [User!]! }\ntype Settings { theme: String! }\ntype Post { id: ID! title: String! author: User! }\nunion Hit = User | Post\ntype PageInfo { hasNextPage: Boolean! endCursor: String }\ntype PostEdge { cursor: String! node: Post! }\ntype PostConnection { edges: [PostEdge!]! pageInfo: PageInfo! totalCount: Int! }\ntype Query { user(id: ID!): User! users(first: Int = 3, role: Role): [User!]! pets: [Animal!]! search(q: String!): [Hit!]! posts(first: Int, after: String): PostConnection! }"
+    }
+  },
+  "output": {
+    "user": {
+      "id": "7",
+      "name": "Dana Okonkwo",
+      "role": "ADMIN",
+      "avatar": "https://example.net/ad-rem",
+      "createdAt": "2022-10-03T01:48:24.640Z",
+      "nickname": "dana.okonkwo",
+      "tags": [
+        "ex nulla",
+        "sed laudantium",
+        "natus rem",
+        "cillum iusto",
+        "occaecati do",
+        "do blanditiis",
+        "eu vero"
+      ],
+      "settings": {
+        "theme": "voluptatum cupiditate"
+      },
+      "friends": [
+        {
+          "id": "118896",
+          "name": "Zoe Nakamura"
+        },
+        {
+          "id": "853492",
+          "name": "Nadia Larsen"
+        }
+      ]
+    },
+    "users": [
+      {
+        "id": "656837",
+        "role": "ADMIN"
+      },
+      {
+        "id": "321214",
+        "role": "VIEWER"
+      },
+      {
+        "id": "22480",
+        "role": "VIEWER"
+      }
+    ],
+    "pets": [
+      {
+        "__typename": "Dog",
+        "name": "Camila Gupta",
+        "barks": true
+      },
+      {
+        "__typename": "Cat",
+        "name": "Farah Tanaka",
+        "lives": 33
+      },
+      {
+        "__typename": "Cat",
+        "name": "Bruno Patel",
+        "lives": 42
+      },
+      {
+        "__typename": "Dog",
+        "name": "Samuel Xu",
+        "barks": false
+      },
+      {
+        "__typename": "Dog",
+        "name": "Ada Patel",
+        "barks": true
+      },
+      {
+        "__typename": "Cat",
+        "name": "Maya Rossi",
+        "lives": 66
+      },
+      {
+        "__typename": "Dog",
+        "name": "Noah Okonkwo",
+        "barks": false
+      },
+      {
+        "__typename": "Cat",
+        "name": "Darius Lindqvist",
+        "lives": 82
+      }
+    ],
+    "search": [
+      {
+        "__typename": "Post",
+        "title": "Accusamus Praesentium Sint"
+      },
+      {
+        "__typename": "User",
+        "name": "Sofia Marsh"
+      },
+      {
+        "__typename": "Post",
+        "title": "Ducimus Excepturi Elit Unde Nostrud Doloremque"
+      },
+      {
+        "__typename": "User",
+        "name": "Chiara Hughes"
+      },
+      {
+        "__typename": "Post",
+        "title": "Nulla Nulla Labore Exercitation Elit Excepturi"
+      },
+      {
+        "__typename": "User",
+        "name": "Victor Torres"
+      },
+      {
+        "__typename": "User",
+        "name": "Lena Adeyemi"
+      },
+      {
+        "__typename": "Post",
+        "title": "Dolores Non Animi Iste"
+      },
+      {
+        "__typename": "Post",
+        "title": "Adipiscing Nulla Iusto"
+      }
+    ],
+    "posts": {
+      "totalCount": 1000,
+      "pageInfo": {
+        "hasNextPage": true,
+        "endCursor": "Z2MxOjI"
+      },
+      "edges": [
+        {
+          "cursor": "Z2MxOjE",
+          "node": {
+            "title": "In Cupidatat Non Ex Fugiat At",
+            "author": {
+              "name": "Jamal Brooks"
+            }
+          }
+        },
+        {
+          "cursor": "Z2MxOjI",
+          "node": {
+            "title": "Magna Occaecat Ea",
+            "author": {
+              "name": "Tomas Kim"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -24,6 +24,8 @@ Decisions already made: the query alone is the main mode (no schema required); l
 14. [Milestones](#14-milestones)
 15. [Open questions](#15-open-questions)
 16. [Implementation decisions](#16-implementation-decisions) (the realism notes are its last section)
+17. [Schema mode](#17-schema-mode)
+18. [`specFromSamples`](#18-specfromsamples)
 
 ---
 
@@ -689,3 +691,149 @@ Choices made while implementing, where the text above was ambiguous or needed a 
 - **World.** `createWorld` accepts `packs`, `images` and `distributions` and applies them to every query; `export()` lists the packs by name (register them before replaying) and omits options left at their defaults. Persona pins feed the avatar initials like any other name field.
 - **Golden changes.** None to the existing goldens. Six goldens were added (`realism-geo`, `realism-geo-finance`, `realism-commerce-finance-health`, `realism-distributions`, `realism-distributions-spec`, `realism-images-svg`); the golden harness registers every pack before running, and the browser-like bundle test bundles and registers them too.
 - **Size.** Core with `graphql`, minified: 202,152 to 212,624 bytes (gzip 58,119 to 62,081). Packs (minified / gzip): geo 12,256 / 5,032, commerce 4,023 / 2,126, finance 5,320 / 2,343, health 2,863 / 1,376; all four together add about 24 kB minified, 10 kB gzipped.
+
+### Learn from real data
+
+Sections 17 and 18 hold the design. Decisions made while implementing:
+
+- **Worlds.** `createWorld({ schema })` and `world.query` take the same `schema` option (threaded through `generateResult`); queries in a world run in schema mode, mutations stay inferred from names.
+- **One walker per mode.** Schema mode reuses the inference machinery (`Inferer`) with a second field handler: the query is validated first, then each selected field is registered on every concrete object type it can be read from, with shape, type name and nullability taken from the schema's field definition. Overrides, `countFields` and `resolveDerives` run unchanged. Without `schema`, no schema code runs and every golden is byte-identical.
+- **Execution uses the real schema** (`GraphQLSchema`), not `buildSchema` of the inferred SDL, so enums, custom scalars, interfaces and argument defaults behave as the schema says. `InferResult.sdl` is `printSchema` of it.
+- **`infer()` returns `byPath`**, the first field info reached by each path. `specFromSamples` compares what the samples show with what the inference decided at that path, and only writes `list`/`one` when they differ.
+- **`text` generator and `datetime` `format`.** The only grammar additions (section 18.6). They are additive: no existing input reaches them.
+- **Date-range rounding.** `datetime` now rounds `minDaysAgo`/`maxDaysAgo` times a day to whole milliseconds before drawing (integer day counts are unchanged), so fractional day bounds no longer throw.
+- **Prompt snapshot** of `suggestSpec` was refreshed: the generator list gained `text`. Prompt wording is outside the output guarantee.
+
+## 17. Schema mode
+
+`graceholder(query, { schema })`, `inferSchema(query, spec, { schema })` and `specFromSamples(query, samples, { schema })` accept a schema. The query stays the main input; the schema supplies the facts the query cannot: it replaces the guesses of sections 4.2 and 4.4, not the generators of section 7.
+
+`schema` is one of: SDL text; a parsed SDL `DocumentNode`; an introspection result (`{ __schema }` or `{ data: { __schema } }`); a graphql-js `GraphQLSchema`. All four give byte-identical output for the same schema. The schema must be valid (`bad-schema` otherwise) and have a query root type (any name). Loaded schemas are cached by identity (objects) or text (strings, the 16 most recent).
+
+### 17.1 Pipeline
+
+1. Parse, select the operation, check directives and compile the spec (as in section 4.1).
+2. Strip graceholder directives and **validate the document against the schema** with graphql-js. Any validation error (unknown field, missing or mistyped argument, unknown enum value, a field that does not exist on an interface) throws `graphql` (or is returned with `errors: "result"`), before anything is generated.
+3. Walk the query with the schema's types. For a field selected on an object type, the field definition decides everything below. For a field selected on an interface, union or via a fragment on one, the field is registered on every concrete object type that can be read from it (each from its own definition), so the executor finds it whatever the run-time type turns out to be.
+4. Apply overrides and check them against the schema (17.5).
+5. Execute against the schema itself.
+
+### 17.2 What the schema decides
+
+| Question | Without a schema | With a schema |
+|---|---|---|
+| object, scalar, list | rules S, L (4.2) | the field's type. `settings: Settings!` is one object although the name is plural; `pets: [Pet]` is a list although it is not |
+| type name of an object | rule N (4.2) | the declared named type. No singularising |
+| non-null | all non-null by default (15.10) | the generated value follows the same default (a nullable field is not nulled at random), but the schema's nullability is respected: a non-null field is never null and `nullRate` on it is a conflict. `inferSchema` reports it as a `nullable` decision |
+| connections | structural (S3) | structural on the schema's types: an object type with `edges { node }` (or `nodes`) plus `pageInfo`, `totalCount` or a `...Connection` name. The connection, edge and `PageInfo` types keep their real names. Paging works exactly as in section 3.4 |
+| unions and interfaces | from fragments (4.4) | the declared abstract type (17.4) |
+| arguments | typed from usage | the declared types, defaults and enums. Identity, filter and paging semantics are those of section 3 |
+| enums | none | the declared values, drawn uniformly from the key of the field |
+| built-in scalars | name heuristics (T rules) | the same heuristics, **when their type fits the declared scalar** (`Int` accepts Int and ID heuristics, `Float` Int and Float, `Boolean` Boolean, `String` String, DateTime and ID, `ID` ID, String and Int). Otherwise a fallback: `Int` gives `int` 0 to 100, `Float` gives `float` 0 to 100, `Boolean` gives `bool`, `String` gives `words`, `ID` gives `id.key` |
+| custom scalars | pass-through scalar, T13 | by scalar name, case-insensitive, `_`/`-` ignored: `DateTime`-like names give `datetime` (keeping the coherent `time.*` generators when the field name selects them), `Date` gives `datetime` with `format: "date"`, `URL`/`URI` `url`, `Email` `person.email`, `UUID`/`GUID` `id.uuid`, `Phone` `person.phone`, `IP` `ip`, `Color` `color`, `Slug` `slug`, `BigInt`/`Long`/`Int64` `int` 0 to 100000, `Decimal`/`Money` `float` 0 to 1000, `JSON`/`Any` `words` (a string; a JSON scalar has no object generator). Any other custom scalar falls back to the field-name heuristic |
+
+Nested lists (`[[T]]`) throw `unsupported`. Element nullability (`[T]`) is accepted and ignored: elements are never null.
+
+`deletedAt: DateTime!` gets `time.deleted` with `nullRate: 0` (a non-null date is never null); `deletedAt: DateTime` is null by default, as without a schema.
+
+### 17.3 Decisions
+
+Decisions with `source: "schema"` are reported for `list`, `type`, `scalar` (value is the declared scalar or enum name; `rule` is `schema-enum`, `schema-scalar`, `schema-builtin` or `schema:<T rule>` when a name heuristic filled a compatible built-in), `arg` (value `name: Type!` from the schema) and the new kind `nullable` (value `true` or `false`). Connections report rule `S3`, abstract types rule `schema-abstract`, shared pools `E2-shared` as before. Overrides report `directive` or `spec` as before.
+
+### 17.4 Pools, interfaces and unions
+
+Every object type in the schema is one pool, keyed by its name, exactly as same-named inferred types share one pool (15.2): `user(id: 5)`, `users[4]` and `post.author` with entity key 5 are the same `User:5`. `own: true` still opts a field out. Entities reached through a list, a connection or a singular field follow section 3 unchanged.
+
+For a field of an abstract type, the entity key comes from the same rules (a pool reference, a list member, or an identifying argument) and the concrete type is `pick(possibleTypes)` from the key `("e", abstractName, entityKey, "__typename")` (section 4.4). `possibleTypes` is:
+
+- **interface:** every type that implements it. The interface's own fields exist on all of them, so every member can answer the selection.
+- **union:** the members the query names in a type condition (inline or fragment), or all members when the query names none. A member the query never asks about would produce empty objects.
+
+An abstract type with no possible types is `bad-schema`.
+
+### 17.5 Directives and spec entries against the schema
+
+Overrides and the schema both speak about shape. Where they agree there is no difference; where they disagree the result is **`schema-conflict`**, thrown at inference time (so `inferSchema` throws too), with the path and the reason. Nothing is silently dropped or coerced.
+
+| Override | With a schema |
+|---|---|
+| `@list` / `@one` (`list`/`one`) | must equal the schema's list-ness (`@one` on `[T]` or `@list` on `T` is a conflict). On a connection: `conflicting-overrides`, as before |
+| `@type(name:)` / `type` | must name the declared type of the field. It cannot choose a concrete member of an abstract type (a conflict) |
+| `@nullRate` / `nullRate` | greater than 0 on a non-null field is a conflict. On a nullable field it is allowed |
+| `@gen` / `@pattern` / `@pick` (`gen`, `pattern`, `pick`) | the generator's SDL type must fit the declared scalar by the compatibility table in 17.2 (`int` on a `String` field, `word` on an `Int` field, `float` on an `Int` field are conflicts; `int` on `Float` is fine). For an enum field only `pick` (or `oneOf` with explicit `values`) is allowed and every value must be a declared value. Custom scalars accept any generator. `time.deleted` on a non-null field needs `args.nullRate` below 1 |
+| `@count`, `@derive`, `@seed`, spec `key`, `own`, `shared` | unchanged (`@count` still needs a list) |
+
+Precedence between a directive and a spec entry is unchanged (5.3); both are checked against the schema after they are merged.
+
+### 17.6 Errors
+
+New codes: `bad-schema` (unreadable or invalid schema, no query root, abstract type without members) and `schema-conflict` (17.5). Query problems against the schema are `graphql`.
+
+## 18. `specFromSamples`
+
+```ts
+specFromSamples(query, samples, opts?): Spec
+analyzeSamples(query, samples, opts?): { spec: Spec; notes: SampleNote[] }
+
+interface SpecFromSamplesOptions {
+  schema?: SchemaInput;               // 17
+  allowValues?: boolean | string[];   // default false; true, or the field paths for which enum-like sets may be copied
+  maxEnum?: number;                   // default 12
+  anchorDate?: string | Date;         // default: the library's default anchor
+  operationName?: string; variables?: Record<string, unknown>;
+}
+```
+
+`samples` is one real response or an array of them, each either a response's `data` or `{ data }`. Keys are **response keys** (aliases are honoured); the spec is written with **field names**, so it drives the same query. The result is a plain object of the side-car grammar (section 5.2), deterministic, independent of the order of the samples, and validated with the spec compiler before it is returned. `analyzeSamples` also returns `notes`, one per decision to withhold, skip or keep a heuristic (`kind`: `withheld`, `kept-heuristic` or `skipped`).
+
+A sample that does not fit the query throws `bad-samples` (not an object, errors instead of data, a scalar where the query selects sub-fields, a list in some samples and a single value in others). With a schema, a sample that contradicts the schema (a value outside an enum, null in a non-null field, a list where the schema has one value) is also `bad-samples`.
+
+### 18.1 What is learned
+
+| Property | From | Emitted as |
+|---|---|---|
+| list size | the length of every list of that path, across all parents and samples | `count: n` or `[min, max]`. Not for paged lists (the page size is the query's, not the collection's), not when a directive sets `@count` |
+| list vs one | observed shape against the inferred decision at that path | `list: true` / `one: true`, only when they disagree (never with a schema) |
+| connection size | `totalCount` values of a connection | `count` on the connection field (a declared total gives a real end, 4.2 C1). Without `totalCount` the size is unknown and nothing is written |
+| null rate | nulls over occurrences | `nullRate: 0.25` (3 decimals, minimum 0.001; 1 when always null). Not on a non-null schema field (a sample with null there is `bad-samples`) |
+| integer range | min and max | `gen: { name: "int", args: { min, max } }` |
+| float range and precision | min, max, and the most decimals seen (at most 8) | `gen: { name: "float", args: { min, max, decimals } }`. With a schema, `Int` always gives `int` and `Float` always `float` (decimals 0 when the samples look integral) |
+| boolean ratio | share of `true` | `gen: { name: "bool", args: { p } }` (3 decimals) |
+| date and date-time range | ISO 8601 strings (a zone-less date-time is read as UTC; dates are read as UTC) | `gen: { name: "datetime", args: { minDaysAgo, maxDaysAgo, format? } }`, whole days before `anchorDate`, widened outward; `format: "date"` for `YYYY-MM-DD`. Negative days are in the future |
+| ID, SKU and code formats | see 18.3 | `pattern`, or a format generator |
+| enum-like sets | see 18.2 | `pick`, only when permitted |
+| string length (text-like fields) | min and max length | `gen: { name: "text", args: { min, max } }` |
+
+Per-path learning: an entry is written for the path where the data was seen. A type reached by several paths gets one entry per path (the first matching entry wins, section 5.3).
+
+### 18.2 Privacy (binding)
+
+By default **no sample string is copied into the spec**. Only structure and statistics are:
+
+1. Numbers, ratios, counts, null rates and date ranges are statistics. A range with one sample is that sample's value; it is a statistic, not text.
+2. Strings become **formats**: a generator name (`id.uuid`, `person.email`, `url`, `imageUrl`, `ip`, `hex` with a length), a `pattern`, or a length range. A pattern replaces each digit by `#`, each lowercase letter by `?`, each uppercase letter by `A`, a position that mixes letters and digits by `*`; punctuation is kept as a literal (escaped if needed). Whitespace, non-ASCII text and positions with different punctuation are not formats. The one exception to "letters are never kept" is a **constant alphabetic prefix** of at most 5 letters, shared by at least two distinct values and directly followed by a digit or a separator (`SKU-`, `usr_`, `ORD`), which is part of the format. With a single distinct value no letter is kept.
+3. **Enum-like sets** (at most `maxEnum` distinct values seen at least twice on average, or at most 24 constant-case tokens such as `OPEN`, `IN_PROGRESS`, each at most 40 characters) are only copied as `pick` when `allowValues` is `true` or lists the field's path. The weights are the observed counts (a plain sorted list when all counts are equal). Without permission the set is withheld (a `withheld` note), or, if the values contain digits and share a shape, learned as a `pattern`.
+4. Even with `allowValues`, values behind personal-data generators (`person.first`, `person.last`, `person.full`, `person.username`, `person.phone`, `person.bio`) are never copied.
+5. Values of a **schema enum** are the schema's, not the data's: the spec is written with the schema's members and observed frequencies, and needs no permission. Members never seen in the samples are not in the pick.
+6. Free text (names, descriptions, addresses, notes) is never copied: where its generator is text-like (`word`, `words`, `sentence`, `paragraph`, `lorem`, `title`, `person.bio`) only its length range is learned; where the generator is a named one (`person.full`, `place.city`, ...) the heuristic stays.
+
+### 18.3 Detection order for strings
+
+First match wins: schema enum, then UUID, email, `http(s)` URL (image extensions give `imageUrl`), IPv4, ISO date-time or date, then enum-like sets (when permitted), then fixed-length lowercase hex of at least 8 characters containing both digits and letters (`hex`), then all-digit strings (a `#` pattern when all have the same length, else `id.int` with `string: true` and the observed range), then the shape pattern, then the length range for text-like generators, then "keep the heuristic". A value set that is none of these (for example variable-length codes, or names) leaves the heuristic in place and says so in a note.
+
+Fields the executor keeps consistent are never learned: those whose generator is `id.key`, `id.int`, `count.of` or `order.*` (identity and aggregates come from the entity graph), derived fields, and any property a directive in the query sets. `time.created`, `time.updated`, `time.published` and `time.birthday` stay as they are when the observed dates already lie in the generator's window (they are mutually coherent); otherwise the dates are learned as a plain `datetime` range, which is not coherent with the entity's other dates.
+
+### 18.4 Limits
+
+Fields are learned independently: correlations (price and category, city and country) are not captured, and learned fields are independent draws. Distributions inside a range are uniform (`int`, `float`, `datetime`) except for `pick` weights and `bool`. A single response teaches only formats and ranges; ranges widen with more samples. Learning is a snapshot of the samples, so a spec committed beside the query should be reviewed.
+
+### 18.5 Grammar extensions
+
+None to the spec grammar (section 5.2). Two catalogue additions, both additive:
+
+- generator **`text`**: `args: { min, max }` (non-negative integers). A length is drawn from `[min, max]`; the value is vocabulary words joined by spaces and cut to that length.
+- generator **`datetime`**, argument **`format`**: `"datetime"` (default) or `"date"`, which returns the first 10 characters (`YYYY-MM-DD`).
+
+A world created with `createWorld({ schema })` runs its queries in schema mode (the schema is not part of `world.export()`; pass it again when replaying).
+
+Also new: the `Decision` kind `nullable`, the `Decision` source `schema`, and the error codes `bad-schema`, `schema-conflict`, `bad-samples`.
