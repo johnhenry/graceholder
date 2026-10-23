@@ -61,6 +61,8 @@ export type ErrorCode =
   | "conflicting-shape"
   | "bad-operation"
   | "bad-options"
+  | "bad-cursor"
+  | "bad-arguments"
   | "unknown-locale"
   | "unsupported"
   | "graphql"

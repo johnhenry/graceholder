@@ -86,12 +86,33 @@ function checkDirectives(nodes) {
 
 const withoutBang = (t) => (t.endsWith("!") ? t.slice(0, -1) : t);
 
+/** Field nodes directly in a selection set, looking through every fragment. */
+function flattenFields(selSet, fragments, out = []) {
+  for (const s of selSet.selections) {
+    if (s.kind === Kind.FIELD) out.push(s);
+    else if (s.kind === Kind.INLINE_FRAGMENT) flattenFields(s.selectionSet, fragments, out);
+    else if (s.kind === Kind.FRAGMENT_SPREAD) flattenFields(fragments.get(s.name.value).selectionSet, fragments, out);
+  }
+  return out;
+}
+
+/** Fields selected outside any type-conditioned fragment (they belong to the abstract type itself). */
+function plainFields(selSet, fragments, out = []) {
+  for (const s of selSet.selections) {
+    if (s.kind === Kind.FIELD && !s.name.value.startsWith("__")) out.push(s);
+    else if (s.kind === Kind.INLINE_FRAGMENT && !s.typeCondition) plainFields(s.selectionSet, fragments, out);
+  }
+  return out;
+}
+
 class Inferer {
   constructor(op, fragments) {
     this.fragments = fragments;
     this.varTypes = new Map((op.variableDefinitions ?? []).map((v) => [v.variable.name.value, print(v.type)]));
     this.types = new Map(); // typeName -> Map(fieldName -> info)
     this.inputs = new Map(); // inputName -> Map(field -> typeStr)
+    this.abstracts = new Map(); // name -> { kind: "union"|"interface", possible: string[] }
+    this.synthetic = new Map(); // connection/edge/pageInfo type -> { kind, item }
     this.customScalars = [];
     this.usesDateTime = false;
     this.walked = new Set();
@@ -127,8 +148,8 @@ class Inferer {
     }
   }
 
-  /** The single type condition applied directly to a field's selection set, if any (N2). */
-  explicitType(selSet, field) {
+  /** Distinct type conditions applied directly to a field's selection set (N2, S4). */
+  explicitTypes(selSet) {
     const found = new Set();
     const look = (set) => {
       for (const s of set.selections) {
@@ -141,19 +162,37 @@ class Inferer {
       }
     };
     look(selSet);
-    if (found.size > 1) {
-      throw new GraceholderError("unsupported", `field ${field} selects several concrete types (${[...found].join(", ")})`, {
-        hint: "unions and interfaces arrive in a later release",
-      });
-    }
-    return found.size === 1 ? [...found][0] : undefined;
+    return [...found];
+  }
+
+  /** S3: is this a Relay connection selection? */
+  isConnection(node, explicit) {
+    if (explicit.length === 1 && explicit[0].endsWith("Connection")) return true;
+    const kids = flattenFields(node.selectionSet, this.fragments);
+    const withSel = (n) => kids.some((k) => k.name.value === n && k.selectionSet);
+    return withSel("edges") || withSel("pageInfo") || (withSel("nodes") && kids.some((k) => k.name.value === "totalCount"));
+  }
+
+  synthField(spec, name, parentType, path) {
+    const fields = this.ensureType(parentType);
+    if (fields.has(name)) return fields.get(name);
+    const info = { name, path, parentType, args: new Map(), explicit: false, synthetic: true, ...spec };
+    fields.set(name, info);
+    if (info.kind === "object") this.ensureType(info.typeName);
+    return info;
   }
 
   field(node, parentType, parentPath) {
     const name = node.name.value;
     if (name.startsWith("__")) return;
-    const fields = this.ensureType(parentType);
     const path = parentPath ? `${parentPath}.${name}` : name;
+    const synth = this.synthetic.get(parentType);
+    if (synth && SYNTH[synth.kind]?.[name]) {
+      const info = this.synthField(SYNTH[synth.kind][name](synth.item), name, parentType, path);
+      if (node.selectionSet) this.walk(node.selectionSet, info.typeName, path);
+      return;
+    }
+    const fields = this.ensureType(parentType);
     const hasSel = Boolean(node.selectionSet);
     let info = fields.get(name);
     if (!info) {
@@ -165,15 +204,75 @@ class Inferer {
     for (const a of node.arguments ?? []) this.arg(info, a);
     if (!hasSel) return;
 
-    const explicit = this.explicitType(node.selectionSet, path);
-    if (info.typeName === undefined) {
-      info.typeName = explicit ?? typeNameFor(name);
-      info.explicit = explicit !== undefined;
-    } else if (explicit !== undefined && explicit !== info.typeName) {
-      throw new GraceholderError("conflicting-shape", `field ${parentType}.${name} is typed ${info.typeName} in one place and ${explicit} in another`, { path });
+    const explicit = this.explicitTypes(node.selectionSet);
+    if (info.typeName !== undefined) {
+      if (explicit.length === 1 && explicit[0] !== info.typeName && !info.abstract) {
+        throw new GraceholderError("conflicting-shape", `field ${parentType}.${name} is typed ${info.typeName} in one place and ${explicit[0]} in another`, { path });
+      }
+      if (info.connection) return this.walk(node.selectionSet, info.typeName, path);
+      if (info.abstract) return this.walkAbstract(node.selectionSet, info, path);
+      return this.walk(node.selectionSet, info.typeName, path);
     }
+
+    if (explicit.length > 1) {
+      const plain = plainFields(node.selectionSet, this.fragments);
+      const kind = plain.length > 0 ? "interface" : "union";
+      info.typeName = typeNameFor(name) + (kind === "union" ? "Union" : "");
+      info.abstract = { kind, possible: explicit };
+      info.explicit = true;
+      this.abstracts.set(info.typeName, info.abstract);
+      for (const t of explicit) this.ensureType(t);
+      if (kind === "interface") this.ensureType(info.typeName);
+      return this.walkAbstract(node.selectionSet, info, path);
+    }
+
+    if (this.isConnection(node, explicit)) {
+      let itemType;
+      let connType;
+      if (explicit.length === 1 && explicit[0].endsWith("Connection")) {
+        connType = explicit[0];
+        itemType = connType.slice(0, -"Connection".length) || "Node";
+      } else {
+        const tokens = tokenize(name);
+        if (tokens.length > 1 && tokens[tokens.length - 1] === "connection") tokens.pop();
+        itemType = typeNameFor(tokens.join("_"));
+        connType = `${itemType}Connection`;
+      }
+      info.typeName = connType;
+      info.connection = { item: itemType };
+      info.explicit = explicit.length === 1;
+      this.synthetic.set(connType, { kind: "connection", item: itemType });
+      this.synthetic.set(`${itemType}Edge`, { kind: "edge", item: itemType });
+      this.synthetic.set("PageInfo", { kind: "pageInfo", item: itemType });
+      this.ensureType(connType);
+      this.ensureType(itemType);
+      return this.walk(node.selectionSet, connType, path);
+    }
+
+    info.typeName = explicit.length === 1 ? explicit[0] : typeNameFor(name);
+    info.explicit = explicit.length === 1;
     this.ensureType(info.typeName);
     this.walk(node.selectionSet, info.typeName, path);
+  }
+
+  /** Walk the selection of a union/interface field: plain fields to the interface and each member, fragments to their type. */
+  walkAbstract(selSet, info, path) {
+    const { kind, possible } = info.abstract;
+    const visit = (set) => {
+      for (const s of set.selections) {
+        if (s.kind === Kind.FIELD) {
+          if (kind === "interface") this.field(s, info.typeName, path);
+          for (const t of possible) this.field(s, t, path);
+        } else if (s.kind === Kind.INLINE_FRAGMENT) {
+          if (s.typeCondition) this.walk(s.selectionSet, s.typeCondition.name.value, path);
+          else visit(s.selectionSet);
+        } else if (s.kind === Kind.FRAGMENT_SPREAD) {
+          const def = this.fragments.get(s.name.value);
+          this.walk(def.selectionSet, def.typeCondition.name.value, path);
+        }
+      }
+    };
+    visit(selSet);
   }
 
   arg(info, a) {
@@ -220,19 +319,39 @@ class Inferer {
   /** Apply L/T rules to every field once all occurrences are merged. */
   finalize() {
     const decisions = [];
+    const users = new Map(); // object type -> number of fields that reference it
+    for (const fields of this.types.values()) {
+      for (const info of fields.values()) if (info.kind === "object" && !info.synthetic) users.set(info.typeName, (users.get(info.typeName) ?? 0) + 1);
+    }
     for (const [typeName, fields] of this.types) {
       for (const info of fields.values()) {
+        if (info.synthetic) {
+          if (info.kind === "scalar" && info.sdl === "DateTime") this.usesDateTime = true;
+          continue;
+        }
         const argNames = [...info.args.keys()];
-        const rule = listRule(info.name, {
-          paging: argNames.some((n) => PAGING_ARGS.has(n)),
-          idsArg: argNames.includes("ids"),
-          listLiteralArg: [...info.args.values()].some((u) => u.some((x) => x.isList || x.type.startsWith("["))),
-        });
-        info.list = rule.list;
-        decisions.push({ path: info.path, field: info.name, kind: "list", value: rule.list, source: rule.rule === "L6" ? "default" : "heuristic", rule: rule.rule });
-        if (info.kind === "object") {
-          decisions.push({ path: info.path, field: info.name, kind: "type", value: info.typeName, source: "heuristic", rule: info.explicit ? "N2" : "N3" });
+        if (info.connection) {
+          info.list = false;
+          decisions.push({ path: info.path, field: info.name, kind: "type", value: info.typeName, source: "heuristic", rule: "S3" });
+        } else if (info.abstract) {
+          info.list = listRule(info.name, { paging: argNames.some((n) => PAGING_ARGS.has(n)), idsArg: argNames.includes("ids"), listLiteralArg: false }).list;
+          decisions.push({ path: info.path, field: info.name, kind: "type", value: info.typeName, source: "heuristic", rule: "S4" });
         } else {
+          const rule = listRule(info.name, {
+            paging: argNames.some((n) => PAGING_ARGS.has(n)),
+            idsArg: argNames.includes("ids"),
+            listLiteralArg: [...info.args.values()].some((u) => u.some((x) => x.isList || x.type.startsWith("["))),
+          });
+          info.list = rule.list;
+          decisions.push({ path: info.path, field: info.name, kind: "list", value: rule.list, source: rule.rule === "L6" ? "default" : "heuristic", rule: rule.rule });
+          if (info.kind === "object") {
+            decisions.push({ path: info.path, field: info.name, kind: "type", value: info.typeName, source: "heuristic", rule: info.explicit ? "N2" : "N3" });
+            if ((users.get(info.typeName) ?? 0) > 1) {
+              decisions.push({ path: info.path, field: info.name, kind: "object", value: `pool:${info.typeName}`, source: "default", rule: "E2-shared" });
+            }
+          }
+        }
+        if (info.kind === "scalar") {
           const c = classifyScalar(info.name, { typeName, list: info.list });
           info.sdl = c.sdl;
           info.gen = c.gen;
@@ -254,17 +373,28 @@ class Inferer {
     if (this.usesDateTime) scalars.push("DateTime");
     scalars.push(...this.customScalars);
     if (scalars.length) out.push(scalars.map((s) => `scalar ${s}`).join("\n"));
+    const implementsOf = new Map();
+    for (const [name, a] of this.abstracts) {
+      if (a.kind === "interface") for (const t of a.possible) implementsOf.set(t, [...(implementsOf.get(t) ?? []), name]);
+    }
     for (const [typeName, fields] of this.types) {
       const lines = [];
       for (const info of fields.values()) {
         const args = [...info.args.entries()].map(([n, u]) => `${n}: ${argType(u)}`);
         const argText = args.length ? `(${args.join(", ")})` : "";
         const base = info.kind === "object" ? info.typeName : info.sdl;
-        const type = info.list ? `[${base}!]!` : `${base}!`;
+        let type = info.list ? `[${base}!]!` : `${base}!`;
+        if (info.nullable) type = type.replace(/!$/, "");
         lines.push(`  ${info.name}${argText}: ${type}`);
       }
       if (lines.length === 0) lines.push("  _empty: String");
-      out.push(`type ${typeName} {\n${lines.join("\n")}\n}`);
+      const abstract = this.abstracts.get(typeName);
+      const impl = implementsOf.get(typeName);
+      const head = abstract?.kind === "interface" ? `interface ${typeName}` : `type ${typeName}${impl ? ` implements ${impl.join(" & ")}` : ""}`;
+      out.push(`${head} {\n${lines.join("\n")}\n}`);
+    }
+    for (const [name, a] of this.abstracts) {
+      if (a.kind === "union") out.push(`union ${name} = ${a.possible.join(" | ")}`);
     }
     for (const [name, fields] of this.inputs) {
       out.push(`input ${name} {\n${[...fields].map(([n, t]) => `  ${n}: ${t}`).join("\n")}\n}`);
@@ -272,6 +402,26 @@ class Inferer {
     return out.join("\n\n") + "\n";
   }
 }
+
+/** Fixed shapes of the Relay types (docs/design.md 3.4). */
+const SYNTH = {
+  connection: {
+    edges: (item) => ({ kind: "object", list: true, typeName: `${item}Edge`, special: "edges" }),
+    nodes: (item) => ({ kind: "object", list: true, typeName: item, special: "nodes" }),
+    pageInfo: () => ({ kind: "object", list: false, typeName: "PageInfo", special: "pageInfo" }),
+    totalCount: () => ({ kind: "scalar", list: false, sdl: "Int", special: "totalCount" }),
+  },
+  edge: {
+    cursor: () => ({ kind: "scalar", list: false, sdl: "String", special: "cursor" }),
+    node: (item) => ({ kind: "object", list: false, typeName: item, special: "edgeNode" }),
+  },
+  pageInfo: {
+    hasNextPage: () => ({ kind: "scalar", list: false, sdl: "Boolean", special: "pageInfoField" }),
+    hasPreviousPage: () => ({ kind: "scalar", list: false, sdl: "Boolean", special: "pageInfoField" }),
+    startCursor: () => ({ kind: "scalar", list: false, sdl: "String", nullable: true, special: "pageInfoField" }),
+    endCursor: () => ({ kind: "scalar", list: false, sdl: "String", nullable: true, special: "pageInfoField" }),
+  },
+};
 
 /** One type for an argument seen several times: identical, else the nullable form of the first. */
 function argType(usages) {
@@ -294,5 +444,5 @@ export function infer(query, options = {}) {
   const document = { kind: Kind.DOCUMENT, definitions: [op, ...fragments.values()] };
   const model = new Map();
   for (const [typeName, fields] of inf.types) model.set(typeName, fields);
-  return { sdl: inf.sdl(), decisions, document, model };
+  return { sdl: inf.sdl(), decisions, document, model, abstracts: inf.abstracts };
 }
