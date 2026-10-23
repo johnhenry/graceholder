@@ -1,0 +1,123 @@
+{
+  "name": "directives-and-spec",
+  "header": {
+    "locale": "en",
+    "keyScheme": "gh1"
+  },
+  "input": {
+    "query": "query Dash($n: Int = 3) @seed(s: \"dash\") {\n  orders @count(min: 2, max: 4) {\n    code @pattern(p: \"ORD-#####\")\n    status @pick(values: [{value: \"new\", weight: 3}, {value: \"paid\", weight: 1}])\n    note @nullRate(p: 0.5)\n    items @count(n: $n) { name price quantity }\n    subtotal total\n  }\n  posts { title slug @derive(from: \"title\") author { id name } }\n  members { id name }\n}",
+    "spec": {
+      "posts.author": {
+        "type": "User"
+      },
+      "members": {
+        "type": "User",
+        "count": 3
+      },
+      "@User.name": {
+        "gen": "person.full"
+      },
+      "**.note": {
+        "gen": "sentence"
+      },
+      "$options": {
+        "poolSize": 5
+      }
+    },
+    "options": {
+      "seed": "spec"
+    }
+  },
+  "output": {
+    "orders": [
+      {
+        "code": "ORD-89701",
+        "status": "paid",
+        "note": null,
+        "items": [
+          {
+            "name": "Vintage Toolkit",
+            "price": 120.44,
+            "quantity": 5
+          },
+          {
+            "name": "Portable Notebook",
+            "price": 419,
+            "quantity": 7
+          },
+          {
+            "name": "Compact Speaker",
+            "price": 201.99,
+            "quantity": 7
+          }
+        ],
+        "subtotal": 4949.13,
+        "total": 5048.11
+      },
+      {
+        "code": "ORD-56483",
+        "status": "new",
+        "note": null,
+        "items": [
+          {
+            "name": "Premium Toolkit",
+            "price": 248.99,
+            "quantity": 4
+          },
+          {
+            "name": "Classic Speaker",
+            "price": 380.99,
+            "quantity": 7
+          },
+          {
+            "name": "Classic Planter",
+            "price": 205.99,
+            "quantity": 1
+          }
+        ],
+        "subtotal": 3868.88,
+        "total": 4139.7
+      }
+    ],
+    "posts": [
+      {
+        "title": "Aliqua Ducimus Perspiciatis Tempor",
+        "slug": "aliqua-ducimus-perspiciatis-tempor",
+        "author": {
+          "id": "5",
+          "name": "Victor Saito"
+        }
+      },
+      {
+        "title": "Lorem Iusto Praesentium Non Cillum",
+        "slug": "lorem-iusto-praesentium-non-cillum",
+        "author": {
+          "id": "4",
+          "name": "Elena Abbott"
+        }
+      },
+      {
+        "title": "Officia Accusamus Accusantium",
+        "slug": "officia-accusamus-accusantium",
+        "author": {
+          "id": "5",
+          "name": "Victor Saito"
+        }
+      }
+    ],
+    "members": [
+      {
+        "id": "1",
+        "name": "Andre Petrov"
+      },
+      {
+        "id": "2",
+        "name": "Felix Bennett"
+      },
+      {
+        "id": "3",
+        "name": "Zoe Ortega"
+      }
+    ]
+  }
+}

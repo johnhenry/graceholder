@@ -15,9 +15,36 @@ export interface Options {
   anchorDate?: string | Date;
   /** `"throw"` (default) throws a {@link GraceholderError}; `"result"` returns `{ data, errors }`. */
   errors?: "throw" | "result";
-  /** Reserved: the side-car spec is not supported yet and throws `unsupported`. */
-  spec?: never;
+  /** Side-car spec keyed by path pattern (`users.name`, `*.status`, `**.createdAt`, `@User.email`). */
+  spec?: Spec;
+  /** Make a spec path that matches no field an error (`unused-spec-path`) instead of a reported decision. */
+  strict?: boolean;
 }
+
+export type Count = number | [number, number] | { min: number; max: number };
+
+export interface FieldSpec {
+  list?: boolean;
+  one?: boolean;
+  count?: Count;
+  gen?: string | { name: string; args?: Record<string, unknown> };
+  pattern?: string;
+  pick?: Array<unknown | { value: unknown; weight: number }>;
+  nullRate?: number;
+  derive?: { from: string };
+  type?: string;
+  seed?: string | number;
+  /** Identifying argument name(s); several names form a composite key. */
+  key?: string | string[];
+  /** Draw members of a nested collection from the type pool. */
+  shared?: boolean;
+  /** Do not share the type pool: entities are owned by their parent. */
+  own?: boolean;
+}
+
+export type Spec = { [path: string]: FieldSpec | { poolSize?: number; endlessTotal?: number } } & {
+  $options?: { poolSize?: number; endlessTotal?: number };
+};
 
 export type Data = Record<string, unknown>;
 
@@ -34,7 +61,7 @@ export declare function graceholder(query: string | DocumentNode, options: Optio
 export interface Decision {
   path: string;
   field: string;
-  kind: "list" | "object" | "scalar" | "arg" | "type" | "count";
+  kind: "list" | "object" | "scalar" | "arg" | "type" | "count" | "null" | "key" | "seed" | "unused";
   value: unknown;
   source: "directive" | "spec" | "heuristic" | "default";
   rule?: string;
@@ -50,8 +77,8 @@ export interface InferResult {
 /** Infer the SDL (and the decisions behind it) from a query alone. */
 export declare function inferSchema(
   query: string | DocumentNode,
-  spec?: undefined,
-  options?: Pick<Options, "operationName" | "variables">,
+  spec?: Spec,
+  options?: Pick<Options, "operationName" | "variables" | "strict">,
 ): InferResult;
 
 export type ErrorCode =
@@ -64,6 +91,11 @@ export type ErrorCode =
   | "bad-cursor"
   | "bad-arguments"
   | "unknown-locale"
+  | "bad-spec"
+  | "bad-directive"
+  | "bad-derive"
+  | "conflicting-overrides"
+  | "unused-spec-path"
   | "unsupported"
   | "graphql"
   | "internal";
