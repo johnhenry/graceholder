@@ -1,13 +1,16 @@
 // Schema inference from a query (docs/design.md section 4): walk the selected
 // operation, merge every (parentType, fieldName), apply the L/N/T rules, emit SDL.
-import { parse, Kind, print, visit, GraphQLError } from "graphql";
+import { parse, Kind, print, GraphQLError, valueFromASTUntyped, visit } from "graphql";
 import { GraceholderError } from "./errors.js";
 import { typeNameFor, pascal, tokenize, singularize, pluralize } from "./naming.js";
 import { listRule, classifyScalar, countOf } from "./rules.js";
+import { checkDirectives, stripDirectives, directiveProps } from "./directives.js";
+import { compileSpec, specProps } from "./spec.js";
+import { generate, GRAPH_GENERATORS } from "./generators.js";
+import { Stream } from "./rng.js";
 
 const BUILTIN_SCALARS = new Set(["Int", "Float", "String", "Boolean", "ID"]);
 const PAGING_ARGS = new Set(["first", "last", "limit", "offset", "skip", "take", "page", "after"]);
-const KNOWN_DIRECTIVES = new Set(["skip", "include"]);
 /** Pass-through scalar for enum literals and other values with no better SDL type. */
 export const ANY_SCALAR = "GraceholderAny";
 
@@ -70,20 +73,6 @@ function reachableFragments(doc, op) {
   return used;
 }
 
-function checkDirectives(nodes) {
-  for (const root of nodes) {
-    visit(root, {
-      Directive(node) {
-        if (!KNOWN_DIRECTIVES.has(node.name.value)) {
-          throw new GraceholderError("unknown-directive", `unknown directive @${node.name.value}`, {
-            hint: "known directives: @skip, @include (graceholder's own directives arrive in a later release)",
-          });
-        }
-      },
-    });
-  }
-}
-
 /** Counts that are measures of something other than a sibling collection. */
 const MEASURES = new Set(["view", "like", "vote", "dislike", "click", "download", "impression", "visit", "reaction", "page", "word", "character"]);
 
@@ -110,8 +99,40 @@ function plainFields(selSet, fragments, out = []) {
   return out;
 }
 
+const OV_SOURCE_RANK = { directive: 2, spec: 1 };
+
+/** SDL scalar type of a generator's output. */
+export function genSdlType(name, args) {
+  if (["int", "person.age", "count.of"].includes(name) || (name === "id.int" && !args.string)) return "Int";
+  if (["float", "money", "percent", "place.lat", "place.lng", "order.subtotal", "order.tax", "order.total"].includes(name)) return "Float";
+  if (name === "bool") return "Boolean";
+  if (name === "datetime" || name.startsWith("time.")) return "DateTime";
+  if (name === "id.key") return "ID";
+  if (name === "oneOf" && Array.isArray(args.values)) {
+    const vals = args.values.map((v) => (v !== null && typeof v === "object" && "weight" in v ? v.value : v));
+    if (vals.every((v) => typeof v === "boolean")) return "Boolean";
+    if (vals.every((v) => Number.isInteger(v))) return "Int";
+    if (vals.every((v) => typeof v === "number")) return "Float";
+  }
+  return "String";
+}
+
+/** Run a generator once with throwaway streams so unknown names and bad arguments fail at inference time. */
+function checkGenerator(name, args, path) {
+  if (GRAPH_GENERATORS.includes(name)) return;
+  const stream = new Stream(1n);
+  try {
+    generate(name, { stream, slot: () => new Stream(1n), anchorMs: 0, args, typeName: "T", entityKey: "1", fieldName: "f" });
+  } catch (e) {
+    if (e instanceof GraceholderError && path) e.path = path;
+    throw e;
+  }
+}
+
 class Inferer {
-  constructor(op, fragments) {
+  constructor(op, fragments, config) {
+    this.spec = config.spec;
+    this.variables = config.variables;
     this.fragments = fragments;
     this.varTypes = new Map((op.variableDefinitions ?? []).map((v) => [v.variable.name.value, print(v.type)]));
     this.types = new Map(); // typeName -> Map(fieldName -> info)
@@ -122,6 +143,7 @@ class Inferer {
     this.usesDateTime = false;
     this.walked = new Set();
     this.ensureType("Query");
+    this.opSeed = directiveProps(op.directives, this.variables, "").seed;
     for (const t of this.varTypes.values()) this.noteNamedType(t);
     this.walk(op.selectionSet, "Query", "");
   }
@@ -170,6 +192,27 @@ class Inferer {
     return [...found];
   }
 
+  /** Combine this occurrence's directive and spec properties into the field's overrides. */
+  mergeOverrides(info, directive, spec, path) {
+    for (const [source, props] of [["spec", spec], ["directive", directive]]) {
+      for (const [prop, value] of Object.entries(props)) {
+        const have = info.ov[prop];
+        if (have === undefined) {
+          info.ov[prop] = value;
+          info.ovSrc[prop] = source;
+        } else if (JSON.stringify(have) !== JSON.stringify(value)) {
+          if (OV_SOURCE_RANK[source] > OV_SOURCE_RANK[info.ovSrc[prop]]) {
+            info.ov[prop] = value;
+            info.ovSrc[prop] = source;
+          } else if (OV_SOURCE_RANK[source] === OV_SOURCE_RANK[info.ovSrc[prop]] && source === "directive") {
+            throw new GraceholderError("conflicting-overrides", `field ${info.parentType}.${info.name} has different @${prop === "gen" ? "gen/pattern/pick" : prop} overrides in different places`, { path });
+          }
+          // equal source and spec: the first (most specific for that path) wins
+        }
+      }
+    }
+  }
+
   /** S3: is this a Relay connection selection? */
   isConnection(node, explicit) {
     if (explicit.length === 1 && explicit[0].endsWith("Connection")) return true;
@@ -201,15 +244,17 @@ class Inferer {
     const hasSel = Boolean(node.selectionSet);
     let info = fields.get(name);
     if (!info) {
-      info = { name, path, parentType, kind: hasSel ? "object" : "scalar", args: new Map(), typeName: undefined, explicit: false };
+      info = { name, path, parentType, kind: hasSel ? "object" : "scalar", args: new Map(), typeName: undefined, explicit: false, ov: {}, ovSrc: {} };
       fields.set(name, info);
     } else if ((info.kind === "object") !== hasSel) {
       throw new GraceholderError("conflicting-shape", `field ${parentType}.${name} is selected both with and without a sub-selection`, { path });
     }
     for (const a of node.arguments ?? []) this.arg(info, a);
+    this.mergeOverrides(info, directiveProps(node.directives, this.variables, path), specProps(this.spec, path, parentType, name), path);
     if (!hasSel) return;
 
-    const explicit = this.explicitTypes(node.selectionSet);
+    let explicit = this.explicitTypes(node.selectionSet);
+    if (info.ov.type !== undefined) explicit = [info.ov.type];
     if (info.typeName !== undefined) {
       if (explicit.length === 1 && explicit[0] !== info.typeName && !info.abstract) {
         throw new GraceholderError("conflicting-shape", `field ${parentType}.${name} is typed ${info.typeName} in one place and ${explicit[0]} in another`, { path });
@@ -240,7 +285,7 @@ class Inferer {
       } else {
         const tokens = tokenize(name);
         if (tokens.length > 1 && tokens[tokens.length - 1] === "connection") tokens.pop();
-        itemType = typeNameFor(tokens.join("_"));
+        itemType = info.ov.type ?? typeNameFor(tokens.join("_"));
         connType = `${itemType}Connection`;
       }
       info.typeName = connType;
@@ -336,10 +381,11 @@ class Inferer {
         }
         const argNames = [...info.args.keys()];
         if (info.connection) {
+          if (info.ov.list !== undefined) throw new GraceholderError("conflicting-overrides", `${info.parentType}.${info.name} is a connection; @list/@one do not apply`, { path: info.path });
           info.list = false;
           decisions.push({ path: info.path, field: info.name, kind: "type", value: info.typeName, source: "heuristic", rule: "S3" });
         } else if (info.abstract) {
-          info.list = listRule(info.name, { paging: argNames.some((n) => PAGING_ARGS.has(n)), idsArg: argNames.includes("ids"), listLiteralArg: false }).list;
+          info.list = info.ov.list ?? listRule(info.name, { paging: argNames.some((n) => PAGING_ARGS.has(n)), idsArg: argNames.includes("ids"), listLiteralArg: false }).list;
           decisions.push({ path: info.path, field: info.name, kind: "type", value: info.typeName, source: "heuristic", rule: "S4" });
         } else {
           const rule = listRule(info.name, {
@@ -347,12 +393,19 @@ class Inferer {
             idsArg: argNames.includes("ids"),
             listLiteralArg: [...info.args.values()].some((u) => u.some((x) => x.isList || x.type.startsWith("["))),
           });
-          // a count is a number, whatever its plural-looking name says
-          info.list = info.kind === "scalar" && countOf(info.name) ? false : rule.list;
-          decisions.push({ path: info.path, field: info.name, kind: "list", value: info.list, source: rule.rule === "L6" ? "default" : "heuristic", rule: rule.rule });
+          let list = info.kind === "scalar" && countOf(info.name) ? false : rule.list; // a count is a number
+          let listRuleId = rule.rule;
+          let listSource = rule.rule === "L6" ? "default" : "heuristic";
+          if (info.ov.list !== undefined) {
+            list = info.ov.list;
+            listRuleId = "L1";
+            listSource = info.ovSrc.list;
+          }
+          info.list = list;
+          decisions.push({ path: info.path, field: info.name, kind: "list", value: list, source: listSource, rule: listRuleId });
           if (info.kind === "object") {
-            decisions.push({ path: info.path, field: info.name, kind: "type", value: info.typeName, source: "heuristic", rule: info.explicit ? "N2" : "N3" });
-            if ((users.get(info.typeName) ?? 0) > 1) {
+            decisions.push({ path: info.path, field: info.name, kind: "type", value: info.typeName, source: info.ov.type ? info.ovSrc.type : "heuristic", rule: info.ov.type ? "N1" : info.explicit ? "N2" : "N3" });
+            if ((users.get(info.typeName) ?? 0) > 1 && !info.ov.own) {
               decisions.push({ path: info.path, field: info.name, kind: "object", value: `pool:${info.typeName}`, source: "default", rule: "E2-shared" });
             }
           }
@@ -372,8 +425,79 @@ class Inferer {
         }
       }
     }
+    this.applyOverrides(decisions);
     this.countFields();
+    this.resolveDerives();
+    for (const entry of this.spec.entries) {
+      if (!entry.used) decisions.push({ path: entry.key, field: entry.key.split(".").pop(), kind: "unused", value: null, source: "spec", rule: "unused-spec-path" });
+    }
     return decisions;
+  }
+
+  /** Apply gen/pattern/pick, count, nullRate, derive, key, own, shared and seed overrides. */
+  applyOverrides(decisions) {
+    const conflict = (info, msg) => new GraceholderError("conflicting-overrides", `${info.parentType}.${info.name}: ${msg}`, { path: info.path });
+    for (const fields of this.types.values()) {
+      for (const info of fields.values()) {
+        if (info.synthetic) continue;
+        const { ov, ovSrc: src } = info;
+        const push = (kind, value, rule, prop) => decisions.push({ path: info.path, field: info.name, kind, value, source: src[prop], rule });
+        if (ov.gen !== undefined) {
+          if (info.kind !== "scalar") throw conflict(info, "@gen/@pattern/@pick apply to scalar fields only");
+          checkGenerator(ov.gen.name, ov.gen.args, info.path);
+          info.gen = ov.gen.name;
+          info.genArgs = ov.gen.args;
+          info.sdl = genSdlType(ov.gen.name, ov.gen.args);
+          info.nullable = ov.gen.name === "time.deleted" && (ov.gen.args.nullRate ?? 1) >= 1 ? true : undefined;
+          if (info.sdl === "DateTime") this.usesDateTime = true;
+          Object.assign(info.decision, { value: info.sdl, source: src.gen, rule: "gen" });
+        }
+        if (ov.count !== undefined) {
+          if (!info.list && !info.connection) throw conflict(info, "@count needs a list (add @list, or use a plural field name)");
+          info.count = ov.count;
+          push("count", ov.count.n !== undefined ? ov.count.n : [ov.count.min, ov.count.max], "C1", "count");
+        }
+        if (ov.nullRate !== undefined) {
+          info.nullRate = ov.nullRate;
+          info.nullable = ov.nullRate > 0 ? true : info.nullable;
+          push("null", ov.nullRate, "nullRate", "nullRate");
+        }
+        if (ov.derive !== undefined) {
+          if (info.kind !== "scalar") throw conflict(info, "@derive applies to scalar fields only");
+          info.derive = ov.derive;
+        }
+        if (ov.key !== undefined) { info.keyArgs = ov.key; push("key", ov.key, "key", "key"); }
+        if (ov.own !== undefined) info.own = ov.own;
+        if (ov.shared !== undefined) info.shared = ov.shared;
+        if (ov.seed !== undefined) { info.seed = ov.seed; push("seed", ov.seed, "seed", "seed"); }
+      }
+    }
+  }
+
+  /** @derive: the source must be a scalar of the same type, and derivations must not form a cycle. */
+  resolveDerives() {
+    for (const [typeName, fields] of this.types) {
+      for (const info of fields.values()) {
+        if (info.derive === undefined) continue;
+        const seen = [info.name];
+        let cur = info;
+        while (cur?.derive !== undefined) {
+          const next = fields.get(cur.derive);
+          if (cur.derive === info.name || seen.includes(cur.derive)) {
+            throw new GraceholderError("bad-derive", `@derive cycle on ${typeName}: ${[...seen, cur.derive].join(" -> ")}`, { path: info.path });
+          }
+          if (next && next.kind !== "scalar") throw new GraceholderError("bad-derive", `${typeName}.${info.name} derives from ${cur.derive}, which is not a scalar field`, { path: info.path });
+          seen.push(cur.derive);
+          cur = next;
+        }
+        const src = fields.get(info.derive);
+        info.sdl = src ? src.sdl : classifyScalar(info.derive, { typeName, list: false }).sdl;
+        if (info.sdl === "DateTime") this.usesDateTime = true;
+        info.list = false;
+        info.nullable = info.nullRate > 0 ? true : undefined;
+        Object.assign(info.decision, { value: info.sdl, source: info.ovSrc.derive, rule: "derive" });
+      }
+    }
   }
 
   /** `<x>Count` / `total<X>s` equal the total of the sibling collection `<x>s` (docs/design.md 6.2). */
@@ -391,6 +515,7 @@ class Inferer {
           t[t.length - 1] = singularize(t[t.length - 1]);
           if (t.join("_") === want) sibling = other;
         }
+        if (info.ov.gen !== undefined || info.ov.derive !== undefined) continue;
         if (!sibling && MEASURES.has(words[words.length - 1])) continue;
         const target = sibling ? sibling.name : camel([...words.slice(0, -1), pluralize(words[words.length - 1])]);
         info.sdl = "Int";
@@ -465,18 +590,46 @@ function argType(usages) {
 
 /**
  * @param {string|import("graphql").DocumentNode} query
- * @param {{ operationName?: string }} [options]
+ * @param {{ operationName?: string, spec?: any, compiledSpec?: any, variables?: Record<string, unknown>, strict?: boolean }} [options]
  */
 export function infer(query, options = {}) {
   const doc = toDocument(query);
   const op = selectOperation(doc, options.operationName);
   const fragments = reachableFragments(doc, op);
   checkDirectives([op, ...fragments.values()]);
-  const inf = new Inferer(op, fragments);
+  const spec = options.compiledSpec ?? compileSpec(options.spec);
+  const variables = operationVariables(op, options.variables);
+  const inf = new Inferer(op, fragments, { spec, variables });
   const decisions = inf.finalize();
+  if (options.strict) {
+    const unused = decisions.find((d) => d.kind === "unused");
+    if (unused) throw new GraceholderError("unused-spec-path", `spec path ${JSON.stringify(unused.path)} matches no field in the operation`, { path: unused.path });
+  }
   /** @type {import("graphql").DocumentNode} */
-  const document = { kind: Kind.DOCUMENT, definitions: [op, ...fragments.values()] };
+  const document = { kind: Kind.DOCUMENT, definitions: [dropDirectiveOnlyVariables(op, fragments, stripDirectives(op)), ...[...fragments.values()].map(stripDirectives)] };
   const model = new Map();
   for (const [typeName, fields] of inf.types) model.set(typeName, fields);
-  return { sdl: inf.sdl(), decisions, document, model, abstracts: inf.abstracts };
+  return { sdl: inf.sdl(), decisions, document, model, abstracts: inf.abstracts, opSeed: inf.opSeed, spec };
+}
+
+/** Variables that only graceholder directives referenced are not variables of the stripped document. */
+function dropDirectiveOnlyVariables(op, fragments, stripped) {
+  const used = new Set();
+  const collect = (node) => visit(node, { VariableDefinition: () => false, Variable(v) { used.add(v.name.value); } });
+  collect(stripped);
+  for (const f of fragments.values()) collect(stripDirectives(f));
+  const defs = (stripped.variableDefinitions ?? []).filter((d) => used.has(d.variable.name.value));
+  return { ...stripped, variableDefinitions: defs };
+}
+
+/** Variable values for directive arguments: provided values over declared defaults. */
+function operationVariables(op, provided = {}) {
+  const out = {};
+  for (const def of op.variableDefinitions ?? []) {
+    if (def.defaultValue) {
+      // defaults are plain literals here; richer coercion happens at execution
+      out[def.variable.name.value] = JSON.parse(JSON.stringify(valueFromASTUntyped(def.defaultValue)));
+    }
+  }
+  return { ...out, ...provided };
 }

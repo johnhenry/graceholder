@@ -31,12 +31,16 @@ export function graceholder(query, options = {}) {
     if (!Object.hasOwn(LOCALES, locale)) {
       throw new GraceholderError("unknown-locale", `unknown locale ${JSON.stringify(locale)}`, { hint: `available: ${Object.keys(LOCALES).join(", ")}` });
     }
-    if (options.spec !== undefined) {
-      throw new GraceholderError("unsupported", "the side-car spec is not supported yet", { hint: "it arrives in a later release" });
-    }
     const ms = anchorMs(options.anchorDate ?? DEFAULT_ANCHOR);
-    const inferred = infer(query, { operationName: options.operationName });
-    const result = run(inferred, { seed: options.seed ?? DEFAULT_SEED, anchorMs: ms, locale, variables: options.variables });
+    const inferred = infer(query, { operationName: options.operationName, spec: options.spec, strict: options.strict, variables: options.variables });
+    const result = run(inferred, {
+      seed: options.seed ?? DEFAULT_SEED,
+      anchorMs: ms,
+      locale,
+      variables: options.variables,
+      poolSize: inferred.spec.options.poolSize,
+      endlessTotal: inferred.spec.options.endlessTotal,
+    });
     if (result.errors?.length) {
       // an error raised by one of our resolvers (bad cursor, bad arguments) keeps its own code
       const own = result.errors.find((e) => e.originalError instanceof GraceholderError);
@@ -57,13 +61,10 @@ export function graceholder(query, options = {}) {
 /**
  * Infer the SDL and the decisions behind it, without generating data.
  * @param {string|import("graphql").DocumentNode} query
- * @param {unknown} [spec] reserved for the side-car spec
- * @param {{ operationName?: string }} [options]
+ * @param {Record<string, any>} [spec] side-car spec (section 5.2)
+ * @param {{ operationName?: string, variables?: Record<string, unknown>, strict?: boolean }} [options]
  */
 export function inferSchema(query, spec, options = {}) {
-  if (spec !== undefined) {
-    throw new GraceholderError("unsupported", "the side-car spec is not supported yet", { hint: "it arrives in a later release" });
-  }
-  const { sdl, decisions, document } = infer(query, options);
+  const { sdl, decisions, document } = infer(query, { operationName: options.operationName, variables: options.variables, strict: options.strict, spec });
   return { sdl, decisions, document };
 }
