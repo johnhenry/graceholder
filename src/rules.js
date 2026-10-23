@@ -1,6 +1,7 @@
 // Inference rules: list-vs-one (L) and scalar type/generator by name (T). FROZEN at 1.0.0.
 import { tokenize, singularize, personaKind } from "./naming.js";
 
+
 const IRREGULAR_PLURALS = new Set(["people", "children", "men", "women", "mice"]);
 /** Plural-looking words that are singular count-like scalars (T8) or mass nouns. */
 const SINGULAR_PLURALS = new Set(["views", "likes", "votes", "dislikes", "news", "series", "species"]);
@@ -57,18 +58,34 @@ const FLOAT_RANGES = {
   longitude: ["float", -180, 180], percent: ["float", 0, 100],
 };
 
+const COHERENT_DATES = { created: "time.created", updated: "time.updated", published: "time.published" };
 const DATE_WORDS = new Set(["at", "date", "time", "timestamp"]);
 const BIRTH_WORDS = new Set(["birthday", "dob"]);
 
 const ORG_TYPE_KINDS = new Set(["org"]);
 
-const r = (sdl, gen, rule, args = {}) => ({ sdl, gen, args, rule });
+const r = (sdl, gen, rule, args = {}, extra = {}) => ({ sdl, gen, args, rule, ...extra });
+
+/**
+ * `<x>Count`, `<x>sCount` and `total<X>s` count a sibling collection (docs/design.md 6.2).
+ * @returns {string[]|null} the words naming the counted collection, last word singular
+ */
+export function countOf(fieldName) {
+  const tokens = tokenize(fieldName);
+  let words = null;
+  if (tokens.length >= 2 && tokens[tokens.length - 1] === "count") words = tokens.slice(0, -1);
+  else if (tokens.length >= 2 && tokens[0] === "total" && /s$/.test(tokens[tokens.length - 1]) && !SINGULAR_PLURALS.has(tokens[tokens.length - 1])) words = tokens.slice(1);
+  if (!words || (words.length === 1 && words[0] === "total")) return null;
+  const out = [...words];
+  out[out.length - 1] = singularize(out[out.length - 1]);
+  return out;
+}
 
 /**
  * Pick the SDL scalar type and generator for a scalar field. First matching row wins (T1-T13).
  * @param {string} fieldName
  * @param {{ typeName: string, list: boolean }} ctx
- * @returns {{ sdl: string, gen: string, args: Record<string, unknown>, rule: string }}
+ * @returns {{ sdl: string, gen: string, args: Record<string, any>, rule: string, nullable?: boolean }}
  */
 export function classifyScalar(fieldName, ctx) {
   if (fieldName === "__typename") return r("String", "typename", "T2");
@@ -102,16 +119,24 @@ export function classifyScalar(fieldName, ctx) {
   const orderTotal = last === "total" && kind === "order";
   if ((last in INT_RANGES && !orderTotal) || numberOf) {
     const [min, max] = numberOf ? INT_RANGES.count : INT_RANGES[last];
+    if (last === "age" && kind === "person" && tokens.length === 1) return r("Int", "person.age", "T8", { min, max });
     return r("Int", "int", "T8", { min, max });
   }
   // T9
+  if (kind === "order" && tokens.length === 1 && (last === "subtotal" || last === "total" || last === "tax")) {
+    const [, min, max] = FLOAT_RANGES[last];
+    return r("Float", `order.${last}`, "T9", { min, max });
+  }
   if (last in FLOAT_RANGES) {
     const [gen, min, max] = FLOAT_RANGES[last];
     return r("Float", gen, "T9", { min, max });
   }
   // T10
   if (DATE_WORDS.has(last) || BIRTH_WORDS.has(last)) {
-    return r("DateTime", "datetime", "T10", BIRTH_WORDS.has(last) ? { minDaysAgo: 6570, maxDaysAgo: 29200 } : { minDaysAgo: 30, maxDaysAgo: 1500 });
+    if (BIRTH_WORDS.has(last)) return r("DateTime", "time.birthday", "T10");
+    if (tokens.length === 2 && last === "at" && first === "deleted") return r("DateTime", "time.deleted", "T10", {}, { nullable: true });
+    if (tokens.length === 2 && last === "at" && first in COHERENT_DATES) return r("DateTime", COHERENT_DATES[first], "T10");
+    return r("DateTime", "datetime", "T10", { minDaysAgo: 30, maxDaysAgo: 1500 });
   }
   // T11
   const named = namedString(tokens, first, last, has, kind, ctx.typeName);

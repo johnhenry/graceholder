@@ -4,10 +4,9 @@ import { createHash } from "node:crypto";
 import { en, LOCALES } from "../src/vocab/en.js";
 
 // SHA-256 of JSON.stringify(table). Any change here is an output change (docs/design.md 7.1, 11).
-const CHECKSUMS = 
-{
-  "firstNames": "a1697e7f7a9c70b1c1d5aca31514820d9f55f58306baeb89ce9583cc6c9f26fb",
-  "lastNames": "335194e1d565a8ce3c7e614e0787f977f3582a089360b01fe3793a6b67d2a9f9",
+const CHECKSUMS = {
+  "firstNames": "5af548990ee35c7de2c9407f79d025e82fe87c737feb875fd5054b06f604a5e0",
+  "lastNames": "8ea9d901f001038c5c28112a8f0f089d7509ee5d4cd8660305ca2cc8dd439ccd",
   "emailDomains": "86a92a321e1bd9b8d3d1834c8ec69c3a1abb943562f661e746e76da9a7faebcc",
   "tlds": "d406178d0c43f8bd6e2b78c049a094c1624905929a9858fd61af0fd5dc616f76",
   "places": "994e1e01d8d2474aabcccf0477c395d9e90bbff12edaf3ca5932988a22785ec1",

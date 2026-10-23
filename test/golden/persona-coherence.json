@@ -1,0 +1,174 @@
+{
+  "name": "persona-coherence",
+  "header": {
+    "locale": "en",
+    "keyScheme": "gh1"
+  },
+  "input": {
+    "query": "{\n  users(first: 4) {\n    id firstName lastName fullName username email phone bio\n    city state country zip address\n    age birthday createdAt updatedAt publishedAt deletedAt\n    commentCount comments { id }\n  }\n}",
+    "options": {
+      "seed": "persona",
+      "anchorDate": "2026-03-01T00:00:00.000Z"
+    }
+  },
+  "output": {
+    "users": [
+      {
+        "id": "1",
+        "firstName": "Gabriel",
+        "lastName": "Lopez",
+        "fullName": "Gabriel Lopez",
+        "username": "gabriel27",
+        "email": "gabriel.lopez@mail.example.com",
+        "phone": "(485) 555-0174",
+        "bio": "Cillum proident iusto voluptatum molestias aute aute accusamus laborum ea.",
+        "city": "Salem",
+        "state": "Massachusetts",
+        "country": "United States",
+        "zip": "01907",
+        "address": "9154 Main Ct, Salem, MA 01907",
+        "age": 68,
+        "birthday": "1957-09-20T00:00:00.000Z",
+        "createdAt": "2023-10-10T07:30:51.232Z",
+        "updatedAt": "2023-12-02T18:57:10.619Z",
+        "publishedAt": "2024-06-27T03:51:03.545Z",
+        "deletedAt": null,
+        "commentCount": 3,
+        "comments": [
+          {
+            "id": "405020"
+          },
+          {
+            "id": "128243"
+          },
+          {
+            "id": "121477"
+          }
+        ]
+      },
+      {
+        "id": "2",
+        "firstName": "Ngozi",
+        "lastName": "Hansen",
+        "fullName": "Ngozi Hansen",
+        "username": "ngozi59",
+        "email": "ngozi.hansen7@example.net",
+        "phone": "(220) 555-0179",
+        "bio": "Eos blanditiis vero minim excepteur at magna similique.",
+        "city": "Burlington",
+        "state": "Vermont",
+        "country": "United States",
+        "zip": "05430",
+        "address": "7927 Spring Way, Burlington, VT 05430",
+        "age": 78,
+        "birthday": "1948-01-14T12:00:00.000Z",
+        "createdAt": "2025-06-26T11:13:31.725Z",
+        "updatedAt": "2025-09-20T08:02:14.124Z",
+        "publishedAt": "2025-11-28T03:14:35.270Z",
+        "deletedAt": null,
+        "commentCount": 8,
+        "comments": [
+          {
+            "id": "601866"
+          },
+          {
+            "id": "966022"
+          },
+          {
+            "id": "57253"
+          },
+          {
+            "id": "266552"
+          },
+          {
+            "id": "859831"
+          },
+          {
+            "id": "570712"
+          },
+          {
+            "id": "608942"
+          },
+          {
+            "id": "950628"
+          }
+        ]
+      },
+      {
+        "id": "3",
+        "firstName": "Tessa",
+        "lastName": "Jensen",
+        "fullName": "Tessa Jensen",
+        "username": "tessa88",
+        "email": "tessajensen@example.net",
+        "phone": "(640) 555-0116",
+        "bio": "Exercitation corrupti blanditiis commodo accusamus cupidatat ut dolores cillum magna animi.",
+        "city": "Fairview",
+        "state": "Oregon",
+        "country": "United States",
+        "zip": "97027",
+        "address": "5144 Meadow Ln, Fairview, OR 97027",
+        "age": 64,
+        "birthday": "1961-08-02T00:00:00.000Z",
+        "createdAt": "2023-02-22T06:44:33.136Z",
+        "updatedAt": "2025-02-19T15:15:35.845Z",
+        "publishedAt": "2026-01-03T21:34:00.934Z",
+        "deletedAt": null,
+        "commentCount": 6,
+        "comments": [
+          {
+            "id": "425522"
+          },
+          {
+            "id": "220879"
+          },
+          {
+            "id": "627322"
+          },
+          {
+            "id": "544450"
+          },
+          {
+            "id": "251282"
+          },
+          {
+            "id": "744809"
+          }
+        ]
+      },
+      {
+        "id": "4",
+        "firstName": "Isaac",
+        "lastName": "Garcia",
+        "fullName": "Isaac Garcia",
+        "username": "igarcia",
+        "email": "isaac.garcia31@inbox.example.org",
+        "phone": "(431) 555-0158",
+        "bio": "Accusamus dolore esse velit corrupti voluptatum perspiciatis voluptatem at atque deleniti anim.",
+        "city": "Franklin",
+        "state": "Tennessee",
+        "country": "United States",
+        "zip": "37010",
+        "address": "7139 Pine Ave, Franklin, TN 37010",
+        "age": 48,
+        "birthday": "1977-11-16T00:00:00.000Z",
+        "createdAt": "2023-05-05T04:43:54.424Z",
+        "updatedAt": "2024-04-16T13:28:40.339Z",
+        "publishedAt": "2024-12-25T14:51:12.152Z",
+        "deletedAt": null,
+        "commentCount": 3,
+        "comments": [
+          {
+            "id": "507712"
+          },
+          {
+            "id": "457495"
+          },
+          {
+            "id": "773478"
+          }
+        ]
+      }
+    ]
+  }
+}

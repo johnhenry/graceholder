@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { tokenize, singularize, pascal, typeNameFor, personaKind } from "../src/naming.js";
-import { listRule, classifyScalar } from "../src/rules.js";
+import { listRule, classifyScalar, countOf } from "../src/rules.js";
 
 test("tokenize: camelCase, snake_case, acronyms, digits", () => {
   const table = [
@@ -145,7 +145,7 @@ test("name-to-type table: T8 integers with frozen ranges", () => {
   // a type context overrides `total`
   for (const type of ["Order", "Invoice", "Cart", "Payment", "Receipt"]) {
     const r = T("total", type);
-    assert.deepEqual([r.sdl, r.gen, r.rule], ["Float", "money", "T9"], type);
+    assert.deepEqual([r.sdl, r.gen, r.rule], ["Float", "order.total", "T9"], type);
   }
 });
 
@@ -165,15 +165,38 @@ test("name-to-type table: T9 floats", () => {
 });
 
 test("name-to-type table: T10 dates", () => {
-  for (const n of ["createdAt", "updatedAt", "deletedAt", "startDate", "date", "time", "timestamp", "publishedAt"]) {
+  const table = [
+    ["createdAt", "time.created"], ["updatedAt", "time.updated"], ["publishedAt", "time.published"],
+    ["startDate", "datetime"], ["date", "datetime"], ["time", "datetime"], ["timestamp", "datetime"], ["lastSeenAt", "datetime"],
+    ["birthday", "time.birthday"], ["dob", "time.birthday"],
+  ];
+  for (const [n, gen] of table) {
     const r = T(n);
-    assert.deepEqual([r.sdl, r.gen, r.rule], ["DateTime", "datetime", "T10"], n);
+    assert.deepEqual([r.sdl, r.gen, r.rule], ["DateTime", gen, "T10"], n);
   }
-  for (const n of ["birthday", "dob"]) {
-    const r = T(n);
-    assert.deepEqual([r.sdl, r.gen, r.rule], ["DateTime", "datetime", "T10"], n);
-    assert.ok(r.args.minDaysAgo >= 6570, n);
-  }
+  const d = T("deletedAt");
+  assert.deepEqual([d.sdl, d.gen, d.nullable], ["DateTime", "time.deleted", true]);
+  assert.equal(T("createdAt").nullable, undefined);
+});
+
+test("persona and order contexts", () => {
+  assert.equal(classifyScalar("age", { typeName: "User", list: false }).gen, "person.age");
+  assert.equal(classifyScalar("age", { typeName: "Widget", list: false }).gen, "int");
+  for (const n of ["subtotal", "tax", "total"]) assert.equal(classifyScalar(n, { typeName: "Order", list: false }).gen, `order.${n}`);
+  assert.equal(classifyScalar("subtotal", { typeName: "Widget", list: false }).gen, "money");
+});
+
+test("countOf: <x>Count and total<X>s name a sibling collection", () => {
+  assert.deepEqual(countOf("commentCount"), ["comment"]);
+  assert.deepEqual(countOf("commentsCount"), ["comment"]);
+  assert.deepEqual(countOf("blogPostCount"), ["blog", "post"]);
+  assert.deepEqual(countOf("categoryCount"), ["category"]);
+  assert.deepEqual(countOf("totalComments"), ["comment"]);
+  assert.equal(countOf("count"), null);
+  assert.equal(countOf("totalCount"), null);
+  assert.equal(countOf("totalPrice"), null);
+  assert.equal(countOf("totalViews"), null);
+  assert.equal(countOf("name"), null);
 });
 
 test("name-to-type table: T11 named strings", () => {

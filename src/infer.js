@@ -2,8 +2,8 @@
 // operation, merge every (parentType, fieldName), apply the L/N/T rules, emit SDL.
 import { parse, Kind, print, visit, GraphQLError } from "graphql";
 import { GraceholderError } from "./errors.js";
-import { typeNameFor, pascal, tokenize } from "./naming.js";
-import { listRule, classifyScalar } from "./rules.js";
+import { typeNameFor, pascal, tokenize, singularize, pluralize } from "./naming.js";
+import { listRule, classifyScalar, countOf } from "./rules.js";
 
 const BUILTIN_SCALARS = new Set(["Int", "Float", "String", "Boolean", "ID"]);
 const PAGING_ARGS = new Set(["first", "last", "limit", "offset", "skip", "take", "page", "after"]);
@@ -83,6 +83,11 @@ function checkDirectives(nodes) {
     });
   }
 }
+
+/** Counts that are measures of something other than a sibling collection. */
+const MEASURES = new Set(["view", "like", "vote", "dislike", "click", "download", "impression", "visit", "reaction", "page", "word", "character"]);
+
+const camel = (words) => words.map((w, i) => (i === 0 ? w : w[0].toUpperCase() + w.slice(1))).join("");
 
 const withoutBang = (t) => (t.endsWith("!") ? t.slice(0, -1) : t);
 
@@ -342,8 +347,9 @@ class Inferer {
             idsArg: argNames.includes("ids"),
             listLiteralArg: [...info.args.values()].some((u) => u.some((x) => x.isList || x.type.startsWith("["))),
           });
-          info.list = rule.list;
-          decisions.push({ path: info.path, field: info.name, kind: "list", value: rule.list, source: rule.rule === "L6" ? "default" : "heuristic", rule: rule.rule });
+          // a count is a number, whatever its plural-looking name says
+          info.list = info.kind === "scalar" && countOf(info.name) ? false : rule.list;
+          decisions.push({ path: info.path, field: info.name, kind: "list", value: info.list, source: rule.rule === "L6" ? "default" : "heuristic", rule: rule.rule });
           if (info.kind === "object") {
             decisions.push({ path: info.path, field: info.name, kind: "type", value: info.typeName, source: "heuristic", rule: info.explicit ? "N2" : "N3" });
             if ((users.get(info.typeName) ?? 0) > 1) {
@@ -356,15 +362,43 @@ class Inferer {
           info.sdl = c.sdl;
           info.gen = c.gen;
           info.genArgs = c.args;
+          info.nullable = c.nullable;
           if (c.sdl === "DateTime") this.usesDateTime = true;
-          decisions.push({ path: info.path, field: info.name, kind: "scalar", value: c.sdl, source: c.rule === "T13" ? "default" : "heuristic", rule: c.rule });
+          info.decision = { path: info.path, field: info.name, kind: "scalar", value: c.sdl, source: c.rule === "T13" ? "default" : "heuristic", rule: c.rule };
+          decisions.push(info.decision);
         }
         for (const [argName, usages] of info.args) {
           decisions.push({ path: info.path, field: info.name, kind: "arg", value: `${argName}: ${argType(usages)}`, source: "heuristic" });
         }
       }
     }
+    this.countFields();
     return decisions;
+  }
+
+  /** `<x>Count` / `total<X>s` equal the total of the sibling collection `<x>s` (docs/design.md 6.2). */
+  countFields() {
+    for (const fields of this.types.values()) {
+      for (const info of fields.values()) {
+        if (info.synthetic || info.kind !== "scalar" || info.list) continue;
+        const words = countOf(info.name);
+        if (!words) continue;
+        const want = words.join("_");
+        let sibling;
+        for (const other of fields.values()) {
+          if (other === info || other.synthetic || !other.list) continue;
+          const t = tokenize(other.name);
+          t[t.length - 1] = singularize(t[t.length - 1]);
+          if (t.join("_") === want) sibling = other;
+        }
+        if (!sibling && MEASURES.has(words[words.length - 1])) continue;
+        const target = sibling ? sibling.name : camel([...words.slice(0, -1), pluralize(words[words.length - 1])]);
+        info.sdl = "Int";
+        info.gen = "count.of";
+        info.genArgs = { of: target };
+        Object.assign(info.decision, { value: "Int", rule: "C-count", source: "heuristic" });
+      }
+    }
   }
 
   sdl() {
