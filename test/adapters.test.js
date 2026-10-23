@@ -282,3 +282,11 @@ test("latency options are validated when a request is made", async () => {
   await assert.rejects(post(f, { query: QUERY }), RangeError);
   assert.throws(() => createFetch({ ...OPTS, world: {} }), TypeError);
 });
+
+test("world options such as schema pass through unchanged", async () => {
+  const schema = `type Query { users: [User!]! } type User { id: ID! name: String! }`;
+  const f = createFetch({ seed: "s", schema });
+  const body = await (await post(f, { query: `{ users { id name } }` })).json();
+  assert.deepEqual(body.data, createWorld({ seed: "s", schema }).query(`{ users { id name } }`).data);
+  assert.ok(body.data.users.length > 0);
+});
