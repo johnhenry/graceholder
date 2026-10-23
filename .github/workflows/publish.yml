@@ -1,0 +1,37 @@
+name: Publish to npm
+
+# Publish model: main is the release branch. A push to main publishes only if
+# package.json's version isn't on npm yet (otherwise a clean no-op), then tags
+# v<version> and creates a GitHub Release. See johnhenry/workflows' README.
+#
+# PUBLISH IS CURRENTLY DISABLED. The package name has never been published, so
+# the first publish is done by hand (npm 2FA) followed by `npm trust`. Until
+# then the job below is skipped unless the repository variable
+# PUBLISH_ENABLED is set to "true", and package.json carries "private": true
+# (npm refuses to publish a private package). To enable publishing:
+#   1. publish the first version manually and run `npm trust`;
+#   2. remove "private" from package.json and set the real version;
+#   3. set the repository variable PUBLISH_ENABLED=true.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: ${{ vars.PUBLISH_ENABLED == 'true' }}
+    permissions:
+      contents: write # tag + GitHub Release by-product of npm-publish.yml
+      id-token: write # npm provenance
+    uses: johnhenry/workflows/.github/workflows/npm-publish.yml@v1
+    with:
+      node-version: "22"
+      gate-commands: |
+        npm run lint
+        npm run typecheck
+        npm test
+    secrets: inherit

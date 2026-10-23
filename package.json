@@ -1,40 +1,59 @@
 {
-  "name": "mock-ql-sculptor",
-  "version": "0.0.2",
-  "description": "A library to transform GraphQL queries into mock data",
-  "main": "index.js",
-  "type": "module",
-  "bin": {
-    "mock-ql-sculptor": "./cli.js"
-  },
-  "scripts": {
-    "test": "node --test",
-    "start": "node cli.js"
-  },
+  "name": "@johnhenry/graceholder",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Consistently repeatable generated data, in any shape you want, from a GraphQL query.",
   "keywords": [
     "graphql",
     "mock",
-    "data",
+    "fake-data",
+    "deterministic",
+    "seeded",
     "testing"
   ],
+  "type": "module",
+  "main": "./src/index.js",
+  "types": "./src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src/"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "lint": "node scripts/check-banned.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "node --test \"test/**/*.test.js\"",
+    "test:golden": "node --test test/golden.test.js",
+    "golden:update": "node scripts/update-golden.mjs",
+    "check": "npm run lint && npm run typecheck && npm test"
+  },
   "author": "John Henry",
   "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "dependencies": {
-    "@snaplet/copycat": "^0.15.1",
-    "graphql-tag": "^2.12.6"
+    "graphql": "^16.0.0"
   },
   "devDependencies": {
-    "@types/node": "^18.0.0"
-  },
-  "engines": {
-    "node": ">=14.0.0"
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/johnhenry/mock-ql-sculptor.git"
+    "url": "git+https://github.com/johnhenry/graceholder.git"
   },
-  "homepage": "https://github.com/johnhenry/mock-ql-sculptor#readme",
+  "homepage": "https://github.com/johnhenry/graceholder#readme",
   "bugs": {
-    "url": "https://github.com/johnhenry/mock-ql-sculptor/issues"
+    "url": "https://github.com/johnhenry/graceholder/issues"
   }
 }
