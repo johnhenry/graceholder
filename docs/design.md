@@ -26,6 +26,7 @@ Decisions already made: the query alone is the main mode (no schema required); l
 16. [Implementation decisions](#16-implementation-decisions) (the realism notes are its last section)
 17. [Schema mode](#17-schema-mode)
 18. [`specFromSamples`](#18-specfromsamples)
+19. [Bulk generation: `stream`, NDJSON, CSV, SQL](#19-bulk-generation)
 
 ---
 
@@ -704,6 +705,10 @@ Sections 17 and 18 hold the design. Decisions made while implementing:
 - **Date-range rounding.** `datetime` now rounds `minDaysAgo`/`maxDaysAgo` times a day to whole milliseconds before drawing (integer day counts are unchanged), so fractional day bounds no longer throw.
 - **Prompt snapshot** of `suggestSpec` was refreshed: the generator list gained `text`. Prompt wording is outside the output guarantee.
 
+### Bulk generation (#21)
+
+`stream`, `toNDJSON`, `toCSV`, `toSQL` and `sqlWriter` are specified in section 19. Implementation notes: windows are executed through the normal executor with only the two paging literals swapped per window (the inferred schema and document are built once); `execute.js` gained one optional `trace` hook that reports the entity (type and key) behind every object it resolves, which `toSQL` needs because the plain data does not carry keys; `generate.js` split `prepare` (infer plus options) out of `generateResult`. Existing goldens are unchanged and none were added: a stream's items are the goldens' values by construction, which `test/bulk-stream.test.js` checks against windowed queries instead.
+
 ## 17. Schema mode
 
 `graceholder(query, { schema })`, `inferSchema(query, spec, { schema })` and `specFromSamples(query, samples, { schema })` accept a schema. The query stays the main input; the schema supplies the facts the query cannot: it replaces the guesses of sections 4.2 and 4.4, not the generators of section 7.
@@ -837,3 +842,43 @@ None to the spec grammar (section 5.2). Two catalogue additions, both additive:
 A world created with `createWorld({ schema })` runs its queries in schema mode (the schema is not part of `world.export()`; pass it again when replaying).
 
 Also new: the `Decision` kind `nullable`, the `Decision` source `schema`, and the error codes `bad-schema`, `schema-conflict`, `bad-samples`.
+
+## 19. Bulk generation
+
+`stream(query, options)` turns the root collection of a query into a lazy iterable, and `toNDJSON`, `toCSV` and `toSQL` write it out (issue #21). Nothing here changes how a value is generated: bulk generation is a way of walking windows of the same keyed entities.
+
+### 19.1 `stream`
+
+- The streamed field is `options.field` (a response key) or the first root field that is a list or a connection. The other root fields are dropped from the operation (they cannot change a value: keys do not depend on siblings).
+- **The defining property:** item `k` of `stream(q, o)` is item `k` of `graceholder` for the same query with `field(offset: k, first: 1)`, for the same seed, spec, packs, schema, locale, anchorDate and variables, and for a world (`world.stream`) item `k` of the same windowed `world.query`. It holds because a window is just the windowed query: each chunk executes `field(offset: s, first: n)` against the same inferred schema, and window position never enters a key (3.4).
+- Inference runs once when the stream is created, and each window only swaps the two paging literals in the inferred document, so the cost per window is execution plus validation. The paging arguments written in the query are replaced; filter arguments are kept and select a different collection (3.3).
+- The paging style comes from the schema: without `schema` it is `offset` and `first`; in schema mode the first of `offset/first`, `skip/take`, `offset/limit`, `skip/limit`, `skip/first`, `after/first` that the schema's field declares (`after` carries the cursor of the item before the window).
+- **Size.** `count` items from `offset`; a collection with a declared size (`@count`, spec `count`) needs no `count` and is clipped to it; otherwise omitting `count` is the error `bad-options` (a bulk stream has no natural end). A short window ends the stream.
+- **Memory.** A window of `chunkSize` items (default 500, at most 10000, the window cap of 3.4) is generated, yielded and dropped; nothing accumulates between windows. Output never depends on `chunkSize`. Measured: 100,000 rows retain a flat 8 MB heap.
+- **Connections.** A connection root yields its nodes (`nodes`, else `edges { node }`).
+- **World.** A world stream reads the world's state when each window is generated: consume it before mutating the world.
+
+### 19.2 `toNDJSON` and `toCSV`
+
+Both take any iterable or async iterable and return a generator of strings (sync for a sync source), so memory stays bounded and a Node `Readable.from` or a web `ReadableStream` wraps them. NDJSON is `JSON.stringify(item) + "\n"`.
+
+CSV follows RFC 4180: CRLF line ends (`eol`), a field is quoted when it holds the delimiter, a quote, CR or LF, quotes are doubled, and an empty string is written `""` so it stays distinct from null (an empty cell). Columns are flattened paths (`address.city`) in query order. For a `stream` the columns come from the query itself (null objects and empty lists do not change them); for any other source they come from the first item unless `columns` is given. Lists: `lists: "json"` (default) writes one JSON cell; `lists: "explode"` (or `explode: [paths]`) writes one row per element, the cross product when several lists are exploded, and an empty list keeps its row with empty cells.
+
+### 19.3 `toSQL`
+
+**Tables.** One table per entity type (`Post` becomes `post`, `BlogPost` becomes `blog_post`; `names: "preserve"`, `tablePrefix` and `tableNames` override). Columns are the type's scalar fields in query order. To keep the rule "the same entity has the same values in every row that references it", the writer widens the query before generating: every selection of a type also selects every scalar the query selects for that type anywhere, so a type has one column set and every row is complete. Fields with arguments are not widened.
+
+**Keys.** Every row has a primary key that is the entity's key (3.1). A type reached only through numeric pool keys (a root collection without filter arguments, or shared singular references) has an `INTEGER` primary key, named `id` when the type has an `id` field generated by `id.key` (which equals the key), else `_key`. A type reached through any owned or argument-selected entity has a `TEXT` primary key `_key` holding the entity key (`3.comments.2`), and its `id` field, if any, is an ordinary column. A numeric key in a text-keyed table, or the reverse, is never silently coerced: the writer fails with `internal`.
+
+**Foreign keys.** A singular object field is a column `<field>_id` in the parent pointing at the child's table. A nested list is a column `<parent>_id` in the child's table pointing at the parent (`<parent>_<field>_id` when a type is owned by several lists). All foreign keys are `DEFERRABLE INITIALLY DEFERRED`; in Postgres they are added by `ALTER TABLE` after all tables exist (so cycles work), in SQLite they are inline. The default script is wrapped in `BEGIN; ... COMMIT;`. A referenced row is written before the row that references it, and an owned child after its parent, so the script also loads with immediate constraints unless it contains a reference cycle.
+
+**Shared-pool references.** `post.author` draws from the pool of `User` (keys 1 to `poolSize`, default 100). Such a row is written the first time it is met and never again: the writer keeps a set of the shared keys it has written, one entry per distinct pool key, so the set is bounded by `poolSize` per type however many rows stream by (root rows with keys above the pool cannot be referenced and are not recorded; owned entities are unique by their path and are not recorded). The same strategy removes duplicates when a type is both a root collection and referenced (users and `post.author`). Consequences: the set is part of the writer's state, so `rows(from, to)` must be called in order and replays earlier items silently when started late (an independent writer for rows 1000 to 2000 regenerates rows 0 to 999 without writing them); a type that is reached from several places gets the children selected at the place it is met first.
+
+**Values.** `Int` is `INTEGER`; `Float` is `DOUBLE PRECISION` (Postgres) or `REAL`; `Boolean` is `BOOLEAN` or `INTEGER` 0/1; `DateTime` is `TIMESTAMPTZ` or `TEXT`; `Date` is `DATE` or `TEXT`; everything else (strings, `ID`, enums, custom scalars) is `TEXT`. A list of scalars is JSON-encoded (`JSONB` or JSON text). Only primary keys are `NOT NULL`. Identifiers are double-quoted with `"` doubled; strings are single-quoted with `'` doubled, which is complete for standard-conforming strings (the default in Postgres, always in SQLite): backslashes, newlines and Unicode are written as they are.
+
+**Limits (errors, not wrong output).** Relay connections and unions or interfaces are not supported by `toSQL` (`bad-options`); two columns that collide after naming are an error. A type that is both owned and referenced through a shared list can only hold one owner per row.
+
+### 19.4 Determinism
+
+All three writers are pure functions of the stream. Output is byte-identical for the same inputs, independent of `chunkSize`, and chunked generation equals a single run: `stream(q, {count: 1000})` followed by `stream(q, {count: 1000, offset: 1000})` writes the same bytes as `count: 2000` (CSV: with `header: false` on the later parts), and for SQL one `sqlWriter` called as `rows(0, 1000)` then `rows(1000, 2000)`, or independent writers, writes the same bytes as `toSQL`.
+

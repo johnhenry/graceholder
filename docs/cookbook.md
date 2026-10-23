@@ -528,6 +528,97 @@ console.log(graceholder("{ user(id: 5) { country iban currency cardNumber } }", 
 }
 ```
 
+## Seed a staging Postgres identically
+
+The query describes the data; the seed makes it repeatable. Every environment that runs the same query, spec, seed and graceholder version gets the same rows, with the same primary keys, so bug reports ("order 4812 is wrong") mean the same thing on every machine. Keep the query and the spec in the repository:
+
+```js
+import { toSQL, stream } from "@johnhenry/graceholder";
+import { createHash } from "node:crypto";
+
+const query = `{
+  customers {
+    id name email createdAt
+    orders @count(min: 0, max: 4) { id placedAt total status lines @count(min: 1, max: 3) { id sku qty price } }
+  }
+}`;
+const options = {
+  seed: "staging-2025",
+  count: 2000,
+  dialect: "postgres",
+  dropExisting: true, // the script can be re-run over an old seed
+  spec: { "customers.orders.status": { pick: ["open", "paid", "shipped"] } },
+};
+
+const sha = (it) => createHash("sha256").update([...it].join("")).digest("hex").slice(0, 12);
+const script = [...toSQL(query, options)].join("");
+console.log({
+  identicalOnEveryRun: sha(toSQL(query, options)) === sha(toSQL(query, options)),
+  tables: [...script.matchAll(/^CREATE TABLE "(\w+)"/gm)].map((m) => m[1]),
+  customers: [...stream(query, options)].length,
+});
+```
+
+```json
+{
+  "identicalOnEveryRun": true,
+  "tables": [
+    "customer",
+    "order",
+    "line"
+  ],
+  "customers": 2000
+}
+```
+
+Load it with `psql` (the script is one transaction, foreign keys are deferred until `COMMIT`, so insert order never matters):
+
+```sh
+node seed.mjs | psql "$STAGING_DATABASE_URL" --single-transaction -v ON_ERROR_STOP=1
+```
+
+where `seed.mjs` writes the statements as they are generated, so memory stays flat however large `count` is:
+
+```javascript
+// seed.mjs
+import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
+import { toSQL } from "@johnhenry/graceholder";
+
+await pipeline(Readable.from(toSQL(query, options)), process.stdout);
+```
+
+How it maps to tables:
+
+- one table per entity type (`customer`, `order`, `line`), with the primary key being the entity's key: `customer.id` is the customer's `id`, and `order._key` is `7.orders.2` (the second order of customer 7), which is stable for ever;
+- nested lists become child tables with a foreign key (`order.customer_id`), singular references become foreign key columns, and entities that many rows share (`post.author`) are written once;
+- a list of scalars (`tags`) is a `JSONB` column.
+
+Things that keep the seed identical:
+
+- **Adding a field** to the query adds a column; every existing value is unchanged (the core invariant), so a migration can be a plain `ALTER TABLE ... ADD COLUMN` plus the new values.
+- **Changing `count`** extends or truncates the data: the first 2000 customers stay the same customers.
+- **Loading in parts**: for a very large seed run `sqlWriter(query, options)` and call `rows(0, 100000)`, `rows(100000, 200000)`, ... in separate runs (an independent writer replays earlier rows without writing them) or use `offset`/`count` on the stream for NDJSON and CSV; the concatenated parts are byte-identical to one run.
+- **Pinned rows**: build the stream from `world.stream(query, options)` after `world.pin("Customer:1", { email: "qa@example.test" })` to keep a known test account in every environment.
+
+For other targets, `toNDJSON` and `toCSV` write the same stream, for example to import with `COPY ... FROM STDIN WITH (FORMAT csv, HEADER true)`:
+
+```js
+import { stream, toCSV } from "@johnhenry/graceholder";
+
+const rows = stream("{ customers { id name address { city country } } }", { seed: "staging-2025", count: 3 });
+console.log([...toCSV(rows, { eol: "\n" })].join("").split("\n").filter(Boolean));
+```
+
+```json
+[
+  "id,name,address.city,address.country",
+  "1,Yara Castillo,Ashland,United States",
+  "2,Camila Ramos,Greenville,United States",
+  "3,Mateo Kim,Auburn,United States"
+]
+```
+
 ## In the browser
 
 The package is plain ES modules with no Node built-ins; any bundler works. The test suite bundles it with esbuild and checks that a browser-like VM and headless Chromium reproduce every golden byte for byte.

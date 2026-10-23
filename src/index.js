@@ -9,6 +9,10 @@ import { realismOptions } from "./generate.js";
 
 export { GraceholderError, KEY_SCHEME, registerPack, registeredPacks };
 export { createWorld } from "./world.js";
+export { stream } from "./bulk/stream.js";
+export { toNDJSON } from "./bulk/ndjson.js";
+export { toCSV } from "./bulk/csv.js";
+export { toSQL, sqlWriter } from "./bulk/sql.js";
 export { suggestSpec, buildSuggestPrompt, SUGGEST_PROMPT_VERSION } from "./suggest.js";
 export { specFromSamples, analyzeSamples } from "./learn.js";
 

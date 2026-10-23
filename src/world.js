@@ -7,6 +7,7 @@ import { compileSpec } from "./spec.js";
 import { keyStream } from "./key.js";
 import { tokenize, typeNameFor } from "./naming.js";
 import { ID_ARGS, entityKeyFromArgs } from "./args.js";
+import { streamWorld } from "./bulk/stream.js";
 import { anchorMs, checkLocale, generateResult, realismOptions, DEFAULT_ANCHOR, DEFAULT_SEED } from "./generate.js";
 
 const DEFAULT_VERBS = {
@@ -410,6 +411,14 @@ export function createWorld(options = {}) {
       } catch (e) {
         return { errors: thrownErrors(e) };
       }
+    },
+
+    /**
+     * The root collection of a query as a lazy iterable (see `stream`), reflecting the pins and
+     * mutations at the time each window is generated: consume it before mutating the world.
+     */
+    stream(query, opts = {}) {
+      return streamWorld(query, { ...base, ...opts }, view);
     },
 
     /** Override fields of one entity ("User:42"); unpinned fields stay generated. Pins are logged. */

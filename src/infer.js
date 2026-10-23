@@ -32,7 +32,7 @@ export function toDocument(query) {
   throw new GraceholderError("bad-options", "query must be a string or a DocumentNode");
 }
 
-function selectOperation(doc, operationName) {
+export function selectOperation(doc, operationName) {
   const ops = doc.definitions.filter((d) => d.kind === Kind.OPERATION_DEFINITION);
   let op;
   if (operationName !== undefined) {

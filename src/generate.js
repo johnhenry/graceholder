@@ -27,13 +27,12 @@ export function realismOptions(options) {
 }
 
 /**
- * Infer and execute one query operation. Returns the raw graphql-js result (errors included) with
- * plain JSON-compatible `data`. `world` is the optional world view (src/world.js).
+ * Infer one query operation and resolve the execution options (shared by single runs and bulk streams).
  * @param {any} query
  * @param {any} [options]
  * @param {any} [world]
  */
-export function generateResult(query, options = {}, world = undefined) {
+export function prepare(query, options = {}, world = undefined) {
   const locale = options.locale ?? "en";
   checkLocale(locale);
   const ms = anchorMs(options.anchorDate ?? DEFAULT_ANCHOR);
@@ -49,7 +48,7 @@ export function generateResult(query, options = {}, world = undefined) {
     nullableFields: world?.nullFields(),
     schema: options.schema,
   });
-  const result = run(inferred, {
+  const runOptions = {
     seed: options.seed ?? DEFAULT_SEED,
     anchorMs: ms,
     locale,
@@ -60,7 +59,20 @@ export function generateResult(query, options = {}, world = undefined) {
     poolSize: inferred.spec.options.poolSize,
     endlessTotal: inferred.spec.options.endlessTotal,
     world,
-  });
+  };
+  return { inferred, runOptions };
+}
+
+/**
+ * Infer and execute one query operation. Returns the raw graphql-js result (errors included) with
+ * plain JSON-compatible `data`. `world` is the optional world view (src/world.js).
+ * @param {any} query
+ * @param {any} [options]
+ * @param {any} [world]
+ */
+export function generateResult(query, options = {}, world = undefined) {
+  const { inferred, runOptions } = prepare(query, options, world);
+  const result = run(inferred, runOptions);
   // graphql-js builds null-prototype objects; hand back plain JSON-compatible data
   if (result.data !== undefined && result.data !== null) result.data = JSON.parse(JSON.stringify(result.data));
   return result;

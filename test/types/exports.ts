@@ -40,3 +40,19 @@ const names: string[] = registeredPacks();
 const dist: Distribution = "zipf";
 const rich = graceholder("{ users { avatar city } }", { packs: [geo, "commerce", finance, health, ...allPacks], images: "svg", distributions: "realistic" });
 void [pack, names, dist, rich];
+
+import { stream, toNDJSON, toCSV, toSQL, sqlWriter, type Stream, type StreamOptions, type SqlOptions, type SqlWriter } from "@johnhenry/graceholder";
+const sOpts: StreamOptions = { seed: "s", count: 10, offset: 2, chunkSize: 5, field: "users", packs: [] };
+const items: Stream = stream("{ users { id } }", sOpts);
+const firstItem: Record<string, any> = [...items][0];
+const nd: string = [...toNDJSON(items)].join("");
+const csv: string = [...toCSV(items, { delimiter: ";", lists: "explode", explode: ["tags"] })].join("");
+const sqlOpts: SqlOptions = { dialect: "sqlite", count: 3, ddl: false, names: "preserve" };
+const script: string = [...toSQL("{ users { id } }", sqlOpts)].join("");
+const writer: SqlWriter = sqlWriter(items, { dialect: "postgres" });
+const part: string = writer.header() + [...writer.rows(0, 5)].join("") + writer.footer();
+async function consume() {
+  for await (const it of items) void it;
+}
+const fromWorld: Stream = world.stream("{ users { id } }", { count: 2, chunkSize: 1 });
+void [firstItem, nd, csv, script, part, consume, fromWorld];
