@@ -1,5 +1,7 @@
 # mock-ql-sculptor
 
+> Previously published as `mock-ql-sculptor` (unscoped, up to 0.0.2). Versions continue here as `@johnhenry/mock-ql-sculptor`.
+
 mock-ql-sculptor is a powerful npm library that transforms GraphQL queries into mock data. It's designed to help developers quickly generate realistic test data based on their GraphQL schema, streamlining the development and testing process for GraphQL-based applications.
 
 ## Features
@@ -12,10 +14,10 @@ mock-ql-sculptor is a powerful npm library that transforms GraphQL queries into 
 
 ## Installation
 
-Install mock-ql-sculptor using npm:
+Install @johnhenry/mock-ql-sculptor using npm:
 
 ```bash
-npm install mock-ql-sculptor
+npm install @johnhenry/mock-ql-sculptor
 ```
 
 ## Usage
@@ -23,7 +25,7 @@ npm install mock-ql-sculptor
 ### As a Library
 
 ```javascript
-import generateMockData from "mock-ql-sculptor";
+import generateMockData from "@johnhenry/mock-ql-sculptor";
 
 const query = `
   query {
@@ -45,7 +47,7 @@ console.log(mockData);
 You can use mock-ql-sculptor directly from the command line:
 
 ```bash
-npx mock-ql-sculptor path/to/your/query.graphql
+npx @johnhenry/mock-ql-sculptor path/to/your/query.graphql
 ```
 
 This will output the generated mock data as JSON to the console.

@@ -1,6 +1,6 @@
 {
-  "name": "mock-ql-sculptor",
-  "version": "0.0.2",
+  "name": "@johnhenry/mock-ql-sculptor",
+  "version": "0.1.0",
   "description": "A library to transform GraphQL queries into mock data",
   "main": "index.js",
   "type": "module",
@@ -17,8 +17,6 @@
     "data",
     "testing"
   ],
-  "author": "",
-  "license": "MIT",
   "dependencies": {
     "@snaplet/copycat": "^0.15.1",
     "graphql-tag": "^2.12.6"
@@ -26,7 +24,20 @@
   "devDependencies": {
     "@types/node": "^18.0.0"
   },
+  "author": "John Henry",
+  "license": "MIT",
   "engines": {
-    "node": ">=14.0.0"
+    "node": ">=22"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/johnhenry/mock-ql-sculptor.git"
+  },
+  "bugs": {
+    "url": "https://github.com/johnhenry/mock-ql-sculptor/issues"
+  },
+  "homepage": "https://github.com/johnhenry/mock-ql-sculptor#readme",
+  "publishConfig": {
+    "access": "public"
   }
 }
