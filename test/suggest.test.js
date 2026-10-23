@@ -123,10 +123,11 @@ test("the existing spec is carried into the request and the result is validated 
 test("the core has no LLM dependency", () => {
   const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
   assert.deepEqual(Object.keys(pkg.dependencies), ["graphql"]);
-  assert.equal(pkg.peerDependencies, undefined);
+  // client adapters add peers, but only optional ones (test/adapters-bundle.test.js checks which)
+  for (const k of Object.keys(pkg.peerDependencies ?? {})) assert.equal(pkg.peerDependenciesMeta?.[k]?.optional, true, k);
   assert.equal(pkg.optionalDependencies, undefined);
   const banned = /anthropic|openai|langchain|ollama|@google|cohere|mistral|llamaindex|ai-matey/i;
-  for (const k of [...Object.keys(pkg.dependencies), ...Object.keys(pkg.devDependencies)]) assert.ok(!banned.test(k), k);
+  for (const k of [...Object.keys(pkg.dependencies), ...Object.keys(pkg.devDependencies), ...Object.keys(pkg.peerDependencies ?? {})]) assert.ok(!banned.test(k), k);
 });
 
 test("suggestSpec knows the packs and distributions the data will be generated with", async () => {

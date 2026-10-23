@@ -354,6 +354,36 @@ console.log("run toSQL for a Postgres or SQLite script:", [...toSQL(query, { see
 
 SQL gets one table per entity type, nested lists as child tables with foreign keys, shared references written once, and Postgres or SQLite quoting. See [docs/api.md](docs/api.md#bulk-generation-stream-tondjson-tocsv-tosql) and the cookbook recipe [Seed a staging Postgres identically](docs/cookbook.md#seed-a-staging-postgres-identically).
 
+## Client adapters
+
+Point an existing GraphQL client at a world instead of a backend. Each adapter is its own subpath export; the client libraries are optional peer dependencies, so the core still depends on `graphql` only.
+
+| Import | Gives you | Peer dependencies |
+| --- | --- | --- |
+| `@johnhenry/graceholder/apollo` | `GraceholderLink` (an `ApolloLink`) | `@apollo/client` |
+| `@johnhenry/graceholder/urql` | `graceholderExchange` | `@urql/core`, `wonka` |
+| `@johnhenry/graceholder/fetch` | `createFetch` (a `fetch` replacement) | none |
+
+Every adapter takes either a ready `world` or world options (`seed`, `spec`, ...), and an optional `latency` that is deterministic from the seed. Mutations go through the world, so a mutation followed by a query sees the new entity.
+
+```js
+import { ApolloClient, InMemoryCache, gql } from "@apollo/client";
+import { GraceholderLink } from "@johnhenry/graceholder/apollo";
+
+const client = new ApolloClient({ link: new GraceholderLink({ seed: "readme", spec: { users: { count: 2 } } }), cache: new InMemoryCache() });
+const { data } = await client.query({ query: gql`{ users { id name } }` });
+console.log(data.users.map((u) => u.name));
+```
+
+```json
+[
+  "Mateo Mbeki",
+  "Julia Wright"
+]
+```
+
+See [docs/api.md](docs/api.md#client-adapters) for the options and [the cookbook](docs/cookbook.md#storybook-with-apollo) for Storybook and Playwright recipes.
+
 ## Determinism and stability
 
 The key scheme, hash (XXH64), generator (SplitMix64), vocabulary and inference rules are frozen at 1.0.0; see [STABILITY.md](STABILITY.md). Golden files in `test/golden` pin the output, are checked on Node 22 and 24, and are reproduced in a browser-like VM and in headless Chromium.
