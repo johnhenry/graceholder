@@ -1,0 +1,61 @@
+{
+  "name": "scenario-empty: scoped to users.posts (counts follow the empty list)",
+  "header": {
+    "locale": "en",
+    "keyScheme": "gh1"
+  },
+  "input": {
+    "query": "{ users { id fullName email age createdAt postCount posts { id title likes } address { city } } }",
+    "options": {
+      "seed": "scenarios"
+    },
+    "spec": {
+      "users": {
+        "count": 3
+      },
+      "users.posts": {
+        "scenario": "empty"
+      }
+    }
+  },
+  "output": {
+    "users": [
+      {
+        "id": "1",
+        "fullName": "Yara Łukasik",
+        "email": "yara.lukasik@example.org",
+        "age": 51,
+        "createdAt": "2023-10-20T20:23:57.674Z",
+        "postCount": 0,
+        "posts": [],
+        "address": {
+          "city": "Bristol"
+        }
+      },
+      {
+        "id": "2",
+        "fullName": "Wanda Xu",
+        "email": "wandaxu@example.com",
+        "age": 35,
+        "createdAt": "2024-11-12T20:25:32.209Z",
+        "postCount": 0,
+        "posts": [],
+        "address": {
+          "city": "Fairview"
+        }
+      },
+      {
+        "id": "3",
+        "fullName": "Bruno Müller",
+        "email": "brunomuller@example.net",
+        "age": 37,
+        "createdAt": "2021-11-08T16:53:41.252Z",
+        "postCount": 0,
+        "posts": [],
+        "address": {
+          "city": "Fredericton"
+        }
+      }
+    ]
+  }
+}

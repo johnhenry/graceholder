@@ -5,6 +5,7 @@ import { GraceholderError } from "./errors.js";
 import { LOCALES } from "./vocab/en.js";
 import { resolvePacks } from "./pack-registry.js";
 import { anchorMs, DEFAULT_ANCHOR } from "./anchor.js";
+import { globalScenarios, errorRateOf } from "./scenario.js";
 
 export const DEFAULT_SEED = "graceholder";
 export { DEFAULT_ANCHOR, anchorMs };
@@ -37,6 +38,8 @@ export function prepare(query, options = {}, world = undefined) {
   checkLocale(locale);
   const ms = anchorMs(options.anchorDate ?? DEFAULT_ANCHOR);
   const realism = realismOptions(options);
+  const scenario = globalScenarios(options.scenario);
+  const errorRate = errorRateOf(options.scenarioOptions);
   const inferred = infer(query, {
     packs: realism.packs,
     realistic: realism.realistic,
@@ -44,6 +47,7 @@ export function prepare(query, options = {}, world = undefined) {
     spec: options.spec,
     strict: options.strict,
     variables: options.variables,
+    scenario,
     nullableTypes: world?.deletedTypes(),
     nullableFields: world?.nullFields(),
     schema: options.schema,
@@ -58,6 +62,7 @@ export function prepare(query, options = {}, world = undefined) {
     variables: options.variables,
     poolSize: inferred.spec.options.poolSize,
     endlessTotal: inferred.spec.options.endlessTotal,
+    errorRate,
     world,
   };
   return { inferred, runOptions };

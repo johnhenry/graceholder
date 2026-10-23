@@ -10,6 +10,8 @@ export const DOC_FILES = ["README.md", "docs/api.md", "docs/cookbook.md"];
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const SRC = pathToFileURL(join(ROOT, "src", "index.js")).href;
 const PACKS = pathToFileURL(join(ROOT, "src", "packs")).href;
+const FAST_CHECK = pathToFileURL(join(ROOT, "src", "fast-check.js")).href;
+const FAST_CHECK_PKG = import.meta.resolve("fast-check");
 const FENCE = /^```(\w+)?[^\n]*\n([\s\S]*?)^```[ \t]*$/gm;
 
 /** @returns {{ lang: string, body: string, start: number, end: number, bodyStart: number, bodyEnd: number }[]} */
@@ -30,6 +32,8 @@ async function runBlock(code, dir, n) {
       .replace(/@johnhenry\/graceholder\/(apollo|urql|fetch)\b/g, (_, name) => pathToFileURL(join(ROOT, "src", "adapters", `${name}.js`)).href)
       .replace(/@johnhenry\/graceholder\/packs\/(\w+)/g, (_, name) => `${PACKS}/${name}.js`)
       .replace(/@johnhenry\/graceholder\/packs(?=["'])/g, `${PACKS}/index.js`)
+      .replace(/@johnhenry\/graceholder\/fast-check(?=["'])/g, FAST_CHECK)
+      .replace(/(["'])fast-check\1/g, JSON.stringify(FAST_CHECK_PKG))
       .replaceAll("@johnhenry/graceholder", SRC),
   );
   const logged = [];

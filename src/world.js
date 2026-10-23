@@ -8,6 +8,7 @@ import { keyStream } from "./key.js";
 import { tokenize, typeNameFor } from "./naming.js";
 import { ID_ARGS, entityKeyFromArgs } from "./args.js";
 import { streamWorld } from "./bulk/stream.js";
+import { globalScenarios, errorRateOf } from "./scenario.js";
 import { anchorMs, checkLocale, generateResult, realismOptions, DEFAULT_ANCHOR, DEFAULT_SEED } from "./generate.js";
 
 const DEFAULT_VERBS = {
@@ -236,10 +237,14 @@ export function createWorld(options = {}) {
   const mutations = compileSpec(spec).mutations;
   // realism options (docs/design.md section 16, Realism) apply to every query of the world; fail early on a bad one
   realismOptions(options);
+  const scenario = globalScenarios(options.scenario);
+  errorRateOf(options.scenarioOptions);
   const realism = {
     ...(options.packs ? { packs: options.packs } : {}),
     ...(options.images !== undefined ? { images: options.images } : {}),
     ...(options.distributions !== undefined ? { distributions: options.distributions } : {}),
+    ...(scenario.length ? { scenario } : {}),
+    ...(options.scenarioOptions !== undefined ? { scenarioOptions: { ...options.scenarioOptions } } : {}),
   };
   const base = { seed, spec, anchorDate: anchorIso, locale, strict: options.strict, ...realism, schema: options.schema };
 

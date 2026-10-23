@@ -718,6 +718,128 @@ console.log([...toCSV(rows, { eol: "\n" })].join("").split("\n").filter(Boolean)
 ]
 ```
 
+## Test your UI against every edge case
+
+Run the same query under each scenario and check that the screen copes. Every run is repeatable, so a failure is a fixture you can keep.
+
+```js
+import { graceholder, SCENARIOS } from "@johnhenry/graceholder";
+
+const query = "{ users(first: 3) { id name posts { id title } } }";
+// a stand-in for a component: it must survive a missing name and a missing list
+const row = (u) => `${u.name ?? "(no name)"} - ${u.posts?.length ?? 0} posts`;
+
+const report = {};
+for (const scenario of SCENARIOS) {
+  const { data, errors = [] } = graceholder(query, { seed: "ui", scenario, errors: "result" });
+  const users = data?.users ?? [];
+  report[scenario] = { users: users.length, first: users[0] ? row(users[0]).slice(0, 28) : null, errors: errors.length };
+}
+console.log(report);
+```
+
+```json
+{
+  "empty": {
+    "users": 0,
+    "first": null,
+    "errors": 0
+  },
+  "huge": {
+    "users": 3,
+    "first": "Yusuf Nakamura - 15 posts",
+    "errors": 0
+  },
+  "nulls": {
+    "users": 3,
+    "first": "(no name) - 0 posts",
+    "errors": 0
+  },
+  "unicode": {
+    "users": 3,
+    "first": "😀🚀🎉 - 8 posts",
+    "errors": 0
+  },
+  "boundary": {
+    "users": 3,
+    "first": "x - 8 posts",
+    "errors": 0
+  },
+  "errors": {
+    "users": 0,
+    "first": null,
+    "errors": 1
+  }
+}
+```
+
+Combine scenarios, or scope one to part of the screen. Here only the posts of each user are empty, and everything else keeps its normal values:
+
+```js
+import { graceholder } from "@johnhenry/graceholder";
+
+const data = graceholder("{ users(first: 2) { id name postCount posts { id } } }", {
+  seed: "ui",
+  scenario: ["unicode"],
+  spec: { "users.posts": { scenario: ["empty"] } },
+});
+console.log(data.users.map((u) => ({ id: u.id, nameLength: u.name.length, postCount: u.postCount, posts: u.posts })));
+```
+
+```json
+[
+  {
+    "id": "1",
+    "nameLength": 6,
+    "postCount": 0,
+    "posts": []
+  },
+  {
+    "id": "2",
+    "nameLength": 14,
+    "postCount": 0,
+    "posts": []
+  }
+]
+```
+
+With `errors`, use `errors: "result"` to get partial data and GraphQL errors with paths, and feed them to whatever stands in for your network layer. `scenarioOptions.errorRate: 1` fails every field.
+
+## Property testing with fast-check
+
+`graceholderArbitrary` generates a seed and a set of scenarios, and hands your property the matching data. When a property fails, fast-check shrinks the seed toward 0 and the scenario set toward empty, and prints the sample as `graceholder({"seed":...,"scenarios":[...]})`.
+
+```js
+import fc from "fast-check";
+import { graceholderArbitrary } from "@johnhenry/graceholder/fast-check";
+
+const query = "{ users(first: 4) { id name age } }";
+const summarize = (u) => `${u.name ?? "?"} (${u.age ?? "?"})`; // code under test
+
+fc.assert(
+  fc.property(graceholderArbitrary(query, { scenarios: ["nulls", "unicode", "boundary", "empty"] }), ({ data }) =>
+    data.users.every((u) => typeof summarize(u) === "string"),
+  ),
+  { numRuns: 50, seed: 1 },
+);
+
+// a property that is wrong: it assumes names are short
+const result = fc.check(
+  fc.property(graceholderArbitrary(query, { scenarios: ["unicode"] }), ({ data }) => data.users.every((u) => u.name.length < 200)),
+  { numRuns: 50, seed: 1 },
+);
+console.log({ failed: result.failed, counterexample: fc.stringify(result.counterexample[0]) });
+```
+
+```json
+{
+  "failed": true,
+  "counterexample": "graceholder({\"seed\":30,\"scenarios\":[\"unicode\"]})"
+}
+```
+
+A failing run reports a fast-check `seed` and `path` (rerun with `fc.assert(property, { seed, path })` to replay it, shrinking included), and the printed sample is enough to rebuild the data without fast-check: `graceholder(query, { seed: 0, scenario: ["unicode"], errors: "result" })`. The `replay(query, sample)` helper from the same subpath does exactly that.
+
 ## In the browser
 
 The package is plain ES modules with no Node built-ins; any bundler works. The test suite bundles it with esbuild and checks that a browser-like VM and headless Chromium reproduce every golden byte for byte.

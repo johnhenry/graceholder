@@ -1,0 +1,127 @@
+{
+  "name": "scenario-boundary: limits of numbers, epoch and far-future dates",
+  "header": {
+    "locale": "en",
+    "keyScheme": "gh1"
+  },
+  "input": {
+    "query": "{ users { id fullName email age createdAt postCount posts { id title likes } address { city } } }",
+    "options": {
+      "seed": "scenarios",
+      "scenario": "boundary"
+    },
+    "spec": {
+      "users": {
+        "count": 3
+      }
+    }
+  },
+  "output": {
+    "users": [
+      {
+        "id": "1",
+        "fullName": "x",
+        "email": "yara.lukasik@example.org",
+        "age": 1,
+        "createdAt": "0001-01-01T00:00:00.000Z",
+        "postCount": -1,
+        "posts": [
+          {
+            "id": "401798",
+            "title": "x",
+            "likes": 2147483647
+          },
+          {
+            "id": "259185",
+            "title": "",
+            "likes": 0
+          },
+          {
+            "id": "850845",
+            "title": "",
+            "likes": -1
+          },
+          {
+            "id": "719028",
+            "title": "x",
+            "likes": -2147483648
+          }
+        ],
+        "address": {
+          "city": ""
+        }
+      },
+      {
+        "id": "2",
+        "fullName": "x",
+        "email": "wandaxu@example.com",
+        "age": 0,
+        "createdAt": "9999-12-31T23:59:59.999Z",
+        "postCount": 2147483647,
+        "posts": [
+          {
+            "id": "304767",
+            "title": "x",
+            "likes": 0
+          },
+          {
+            "id": "245607",
+            "title": "",
+            "likes": -2147483648
+          },
+          {
+            "id": "303968",
+            "title": "x",
+            "likes": 0
+          },
+          {
+            "id": "20609",
+            "title": "x",
+            "likes": -1
+          }
+        ],
+        "address": {
+          "city": "x"
+        }
+      },
+      {
+        "id": "3",
+        "fullName": "x",
+        "email": "brunomuller@example.net",
+        "age": -1,
+        "createdAt": "0001-01-01T00:00:00.000Z",
+        "postCount": 0,
+        "posts": [
+          {
+            "id": "815334",
+            "title": "x",
+            "likes": 0
+          },
+          {
+            "id": "702649",
+            "title": "x",
+            "likes": 1
+          },
+          {
+            "id": "665301",
+            "title": "",
+            "likes": 1
+          },
+          {
+            "id": "742980",
+            "title": "",
+            "likes": 0
+          },
+          {
+            "id": "710295",
+            "title": "",
+            "likes": 2147483647
+          }
+        ],
+        "address": {
+          "city": "x"
+        }
+      }
+    ]
+  }
+}

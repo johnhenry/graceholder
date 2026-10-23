@@ -1,0 +1,127 @@
+{
+  "name": "scenario-unicode: text fields become edge-case strings",
+  "header": {
+    "locale": "en",
+    "keyScheme": "gh1"
+  },
+  "input": {
+    "query": "{ users { id fullName email age createdAt postCount posts { id title likes } address { city } } }",
+    "options": {
+      "seed": "scenarios",
+      "scenario": "unicode"
+    },
+    "spec": {
+      "users": {
+        "count": 3
+      }
+    }
+  },
+  "output": {
+    "users": [
+      {
+        "id": "1",
+        "fullName": "𝓐𝓑𝓒 𠮷𠮸",
+        "email": "yara.lukasik@example.org",
+        "age": 51,
+        "createdAt": "2023-10-20T20:23:57.674Z",
+        "postCount": 4,
+        "posts": [
+          {
+            "id": "401798",
+            "title": "é vs é, ñ vs ñ",
+            "likes": 4649
+          },
+          {
+            "id": "259185",
+            "title": "🇯🇵🇺🇸 flags 👍🏽",
+            "likes": 649
+          },
+          {
+            "id": "850845",
+            "title": "مرحبا بالعالم",
+            "likes": 4442
+          },
+          {
+            "id": "719028",
+            "title": "日本語のテキストと漢字",
+            "likes": 1696
+          }
+        ],
+        "address": {
+          "city": "é vs é, ñ vs ñ"
+        }
+      },
+      {
+        "id": "2",
+        "fullName": "👨‍👩‍👧‍👦 family",
+        "email": "wandaxu@example.com",
+        "age": 35,
+        "createdAt": "2024-11-12T20:25:32.209Z",
+        "postCount": 4,
+        "posts": [
+          {
+            "id": "304767",
+            "title": "مرحبا بالعالم",
+            "likes": 2759
+          },
+          {
+            "id": "245607",
+            "title": "<b>bold</b> & \"quoted\" 'text' </script>",
+            "likes": 380
+          },
+          {
+            "id": "303968",
+            "title": "Z͖͓͡à͔l͒͆g̕o҉",
+            "likes": 4614
+          },
+          {
+            "id": "20609",
+            "title": "Z͖͓͡à͔l͒͆g̕o҉",
+            "likes": 1943
+          }
+        ],
+        "address": {
+          "city": "  leading and trailing  "
+        }
+      },
+      {
+        "id": "3",
+        "fullName": "abc مرحبا 123 שלום def",
+        "email": "brunomuller@example.net",
+        "age": 37,
+        "createdAt": "2021-11-08T16:53:41.252Z",
+        "postCount": 5,
+        "posts": [
+          {
+            "id": "815334",
+            "title": "🇯🇵🇺🇸 flags 👍🏽",
+            "likes": 2934
+          },
+          {
+            "id": "702649",
+            "title": "Z͖͓͡à͔l͒͆g̕o҉",
+            "likes": 4466
+          },
+          {
+            "id": "665301",
+            "title": "<b>bold</b> & \"quoted\" 'text' </script>",
+            "likes": 907
+          },
+          {
+            "id": "742980",
+            "title": "שלום עולם",
+            "likes": 3000
+          },
+          {
+            "id": "710295",
+            "title": "é vs é, ñ vs ñ",
+            "likes": 1886
+          }
+        ],
+        "address": {
+          "city": "🇯🇵🇺🇸 flags 👍🏽"
+        }
+      }
+    ]
+  }
+}

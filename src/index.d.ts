@@ -5,6 +5,23 @@ export declare const KEY_SCHEME: "gh1";
 
 /** A schema for schema mode: SDL text, a parsed SDL document, an introspection result, or a graphql-js schema. */
 export type SchemaInput = string | DocumentNode | GraphQLSchema | IntrospectionQuery | { data: IntrospectionQuery };
+/** Edge-case modes (docs/design.md section 16, Scenarios). Combine them in an array. */
+export type Scenario = "empty" | "huge" | "nulls" | "unicode" | "boundary" | "errors";
+/** The scenario names, in the order a set is normalised to. */
+export declare const SCENARIOS: readonly Scenario[];
+
+export interface ScenarioOptions {
+  /** Share of eligible fields that fail under the `errors` scenario, from 0 to 1. Default 0.25. */
+  errorRate?: number;
+}
+
+/** A GraphQL error in JSON form (what the `errors` scenario returns). */
+export interface ResultError {
+  message: string;
+  locations?: Array<{ line: number; column: number }>;
+  path?: Array<string | number>;
+  extensions?: Record<string, unknown>;
+}
 
 export interface Options {
   /** Default `"graceholder"`. Numbers are stringified (`String(n)`). */
@@ -43,6 +60,11 @@ export interface Options {
    * lists and unions/interfaces come from it instead of from name heuristics.
    */
   schema?: SchemaInput;
+   * Edge-case mode(s), one name or an array: `empty`, `huge`, `nulls`, `unicode`, `boundary`, `errors`.
+   * Applies to every field unless a spec entry sets its own `scenario`. Default none (output unchanged).
+   */
+  scenario?: Scenario | Scenario[] | "none";
+  scenarioOptions?: ScenarioOptions;
 }
 
 /** Distribution names accepted by the `dist` argument of `int`, `float` and `money`. */
@@ -84,6 +106,8 @@ export interface FieldSpec {
   shared?: boolean;
   /** Do not share the type pool: entities are owned by their parent. */
   own?: boolean;
+  /** Scenario(s) for this field only (replacing the global ones); `"none"` or `[]` opts the field out. */
+  scenario?: Scenario | Scenario[] | "none";
 }
 
 export type MutationOp = "create" | "update" | "delete";
@@ -109,7 +133,7 @@ export type Data = Record<string, unknown>;
 
 export interface ResultMode {
   data?: Data;
-  errors?: readonly GraphQLError[];
+  errors?: readonly GraphQLError[] | ResultError[];
 }
 
 /** Generate data for a query. Synchronous; same inputs give byte-identical output. */
@@ -137,7 +161,7 @@ export interface InferResult {
 export declare function inferSchema(
   query: string | DocumentNode,
   spec?: Spec,
-  options?: Pick<Options, "operationName" | "variables" | "strict" | "packs" | "images" | "distributions" | "schema">,
+  options?: Pick<Options, "operationName" | "variables" | "strict" | "packs" | "images" | "distributions" | "schema" | "scenario">,
 ): InferResult;
 
 export type ErrorCode =
@@ -172,7 +196,9 @@ export declare class GraceholderError extends Error {
   path?: string;
   hint?: string;
   /** For `graphql` errors, every underlying GraphQL error. */
-  errors?: readonly GraphQLError[];
+  errors?: readonly GraphQLError[] | ResultError[];
+  /** For `graphql` errors raised by the `errors` scenario, the partial data. */
+  data?: Data | null;
   constructor(code: ErrorCode, message: string, extra?: { path?: string; hint?: string; cause?: unknown });
 }
 
@@ -207,6 +233,8 @@ export interface ExportedWorld {
   packs?: string[];
   images?: "url" | "svg";
   distributions?: "uniform" | "realistic";
+  scenario?: Scenario[];
+  scenarioOptions?: ScenarioOptions;
   log: WorldEntry[];
 }
 
@@ -222,6 +250,8 @@ export interface WorldOptions {
   distributions?: "uniform" | "realistic";
   /** Schema mode for the world's queries. */
   schema?: SchemaInput;
+  scenario?: Scenario | Scenario[] | "none";
+  scenarioOptions?: ScenarioOptions;
   /** A log from `world.export()`; replayed at creation. */
   log?: WorldEntry[];
 }

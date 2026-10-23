@@ -1,0 +1,53 @@
+{
+  "name": "scenario-nulls: every nullable field below the root is null, ids stay",
+  "header": {
+    "locale": "en",
+    "keyScheme": "gh1"
+  },
+  "input": {
+    "query": "{ users { id fullName email age createdAt postCount posts { id title likes } address { city } } }",
+    "options": {
+      "seed": "scenarios",
+      "scenario": "nulls"
+    },
+    "spec": {
+      "users": {
+        "count": 3
+      }
+    }
+  },
+  "output": {
+    "users": [
+      {
+        "id": "1",
+        "fullName": null,
+        "email": null,
+        "age": null,
+        "createdAt": null,
+        "postCount": null,
+        "posts": null,
+        "address": null
+      },
+      {
+        "id": "2",
+        "fullName": null,
+        "email": null,
+        "age": null,
+        "createdAt": null,
+        "postCount": null,
+        "posts": null,
+        "address": null
+      },
+      {
+        "id": "3",
+        "fullName": null,
+        "email": null,
+        "age": null,
+        "createdAt": null,
+        "postCount": null,
+        "posts": null,
+        "address": null
+      }
+    ]
+  }
+}

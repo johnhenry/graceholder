@@ -21,6 +21,8 @@ import { graceholder, stream, toNDJSON, toCSV, toSQL, sqlWriter, createWorld, in
 | `images` | `"url"` | `"svg"` returns deterministic [inline SVG data URIs](#images) for image fields. |
 | `distributions` | `"uniform"` | `"realistic"` makes popularity fields heavy-tailed and turns `...History`/`...Series` fields into [time series](#distributions-and-time-series). |
 | `schema` | none | [Schema mode](#schema-mode): SDL, an introspection result or a graphql-js schema. Without it the schema is inferred from the query. |
+| `scenario` | none | One [scenario](#scenarios) or an array: `empty`, `huge`, `nulls`, `unicode`, `boundary`, `errors` (`"none"` or `[]` for none). Without it the output is byte-identical to before. |
+| `scenarioOptions` | `{ errorRate: 0.25 }` | `errorRate` (0 to 1): the share of fields that fail under the `errors` scenario. |
 | `errors` | `"throw"` | `"result"` returns `{ data }` on success and `{ errors }` for GraphQL parse, validation and execution errors (other graceholder errors always throw). |
 
 ## `inferSchema(query, spec?, options?)`
@@ -133,7 +135,7 @@ Generators are pure. Names are used by `@gen` and spec `gen`; an unknown name th
 
 ## `createWorld(options?)`
 
-A persistent, deterministic world shared across queries: pinned entities, and mutations that change what later queries see. Options: `seed`, `spec`, `anchorDate`, `locale`, `strict`, `schema`, `packs`, `images`, `distributions` (as for `graceholder`) and `log` (a previous `export().log`). With no pins and no mutations it answers exactly like `graceholder` with the same options.
+A persistent, deterministic world shared across queries: pinned entities, and mutations that change what later queries see. Options: `seed`, `spec`, `anchorDate`, `locale`, `strict`, `schema`, `scenario`, `scenarioOptions`, `packs`, `images`, `distributions` (as for `graceholder`) and `log` (a previous `export().log`). With no pins and no mutations it answers exactly like `graceholder` with the same options.
 
 - `world.query(query, { variables, operationName })` runs a query or a mutation and returns a GraphQL result, `{ data }` or `{ data?, errors }`; it does not throw for a bad request (the graceholder code is in `errors[i].extensions.code`).
 - `world.pin("Type:key", { field: value })` overrides fields of one entity; `name`, `firstName` or `lastName` pins keep `email`, `username` and the other name fields coherent. Returns the world.
@@ -500,6 +502,42 @@ console.log({ spec, status: withValues["orders.status"], sample: graceholder(que
   }
 }
 ```
+## Scenarios
+
+Scenarios make edge cases repeatable. A scenario never changes how a value is generated; it replaces what a field returns, with a choice that is a pure function of the seed and the field's key. Pass `scenario` to `graceholder()` or `createWorld()`, or set it on a spec path. Several scenarios combine (`scenario: ["unicode", "nulls"]`); order does not matter.
+
+| Scenario | Effect |
+|---|---|
+| `empty` | Every list is empty: object lists, scalar lists, connections (`totalCount` 0, no pages, null cursors). Counts and order totals that depend on the list (`postCount`, `subtotal`) are 0 too. |
+| `huge` | Lists are large: 100 items at the top level, 15 one list deep, 6 two deep, 3 beyond (a flat size would multiply). It overrides `@count`. A connection or paged list has a total of 100000 and its pages still work. |
+| `nulls` | Every nullable field is `null`. See [nullability](#nullability). |
+| `unicode` | Free-text strings (names, titles, sentences, paragraphs, addresses, and fields with no better rule) become right-to-left text, emoji and ZWJ sequences, combining marks, CJK, zero-width characters, bidi overrides, markup, and a string of about 2800 characters. Ids, emails, URLs and other structured strings are left alone. |
+| `boundary` | `Int` is one of 0, 1, -1, 2147483647, -2147483648; `Float` one of 0, +-1, +-`Number.MAX_VALUE`, `Number.MIN_VALUE`, `EPSILON` and the safe-integer limits; a date is the epoch, `0001-01-01`, `2038-01-19` or `9999-12-31`; free text is `""` or `"x"`. Ids are left alone. |
+| `errors` | Some fields fail with a GraphQL error (about one in four; see `scenarioOptions.errorRate`). Which fields is decided by the field's key, so it is deterministic and does not depend on what else is selected. |
+
+**Scoping.** A spec entry takes `scenario` like any other property, and the usual [path patterns](#side-car-spec) apply. `{ "users.posts": { scenario: "empty" } }` empties only that list; `{ "users.**": { scenario: "unicode" } }` covers a subtree; `scenario: "none"` (or `[]`) opts a field out of the global scenario. A scenario acts on the field it names (the entry replaces the global scenario for that field only); use `**` for a subtree. As with every spec property, a field of a type reached by several paths has one setting, the first (most specific) one.
+
+**Nullability.** A query has no schema, so nothing is nullable by default: inference marks every field non-null, apart from the few that are nullable by their nature (`deletedAt`, a field with `nullRate`, a field a world pinned to `null`). The `nulls` scenario therefore widens: under `nulls`, every field except `id`, the Relay machinery (`edges`, `node`, `pageInfo`, ...) and the fields directly under the operation root is made nullable in the inferred SDL (a list field becomes a nullable list of non-null items) and returned as `null`. So `{ users { id name posts { id } } }` gives users with `id` set and `name` and `posts` null, rather than `{ users: null }`. Widening also shows in `inferSchema(query, spec, { scenario: "nulls" })`. In [schema mode](#schema-mode) the schema's nullability decides instead: only fields that are nullable in the schema are nulled, non-null fields keep their values, and nothing is widened. Fields that already are nullable (`deletedAt`) are always nulled.
+
+**Errors.** Under `errors`, a failing field throws inside its resolver, so graphql-js does the rest: the error carries the right `path` and `locations`, the field is `null` in `data`, and if the field is non-null the null propagates to the nearest nullable parent, exactly as for a real server. In the inferred SDL the fields that can fail (all except `id`) are nullable, so a failure costs one value and not the whole response; with a schema, its non-null fields propagate as they would in production. Errors have a message from a small set and `extensions: { code, scenario: "errors" }` where `code` is one of `INTERNAL_SERVER_ERROR`, `SERVICE_UNAVAILABLE`, `FORBIDDEN`, `TIMEOUT`.
+
+- With `errors: "result"` you get `{ data, errors }`, `errors` as plain JSON (`message`, `locations`, `path`, `extensions`) and `data` partial, or `null` when an error reached the root.
+- With the default `errors: "throw"` the call throws a [`GraceholderError`](#errors) with code `graphql`, `error.errors` (the same plain errors) and `error.data` (the partial data), because a bare `data` could not report the failures. Use `errors: "result"` with this scenario.
+- A world returns the same `{ data, errors }` from `world.query`. Genuine failures (bad arguments, bad cursors) are not scenario errors and behave as before.
+
+Pinned world values beat `unicode` and `boundary`; `nulls` and `errors` beat pins (they are about the response, not the entity).
+
+## Property testing with fast-check
+
+`@johnhenry/graceholder/fast-check` exports `graceholderArbitrary(query, options?)`, an [fast-check](https://fast-check.dev) arbitrary over a seed and a set of scenarios. fast-check is an optional peer dependency (install it yourself); the core never imports it. Each sample is `{ seed, scenarios, data, errors }`: `data` and `errors` are what `graceholder(query, { seed, scenario: scenarios, errors: "result" })` returns.
+
+| Option | Default | Meaning |
+|---|---|---|
+| `seeds` | integers from 0 to 2^31-1 | An arbitrary of seeds; use `fc.constantFrom(...)` for a fixed few. |
+| `scenarios` | all six | The scenarios that may be combined, or `false` / `[]` for none. |
+| anything else | | Passed to `graceholder()` (`spec`, `variables`, `packs`, `scenarioOptions`, ...). `seed`, `scenario` and `errors` are rejected: the arbitrary owns them. |
+
+Shrinking works on both parts: the seed shrinks toward 0 (so toward the smallest failing seed), and the scenario set shrinks toward empty, then toward the one scenario that matters. A failing sample is printed by fast-check as `graceholder({"seed":0,"scenarios":["nulls"]})`; that is all that is needed to reproduce it, with `graceholder(query, { seed, scenario })`, with `replay(query, { seed, scenarios })` (also exported) or with fast-check's own `{ seed, path }`. `huge` can be slow on deeply nested queries: leave it out of `scenarios` there.
 
 ## `suggestSpec(query, { llm, spec? })`
 
