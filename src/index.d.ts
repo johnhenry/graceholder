@@ -42,8 +42,23 @@ export interface FieldSpec {
   own?: boolean;
 }
 
-export type Spec = { [path: string]: FieldSpec | { poolSize?: number; endlessTotal?: number } } & {
+export type MutationOp = "create" | "update" | "delete";
+
+/** How mutations are read (docs/design.md section 16, World); used by a world only. */
+export interface MutationSpec {
+  /** Extra verbs: the first word of a mutation field name. */
+  verbs?: Record<string, MutationOp>;
+  /** Per mutation field: what it does, which type it affects, where its id and input are. */
+  fields?: Record<string, { op: MutationOp; type?: string; idArg?: string; input?: string; read?: string }>;
+  /** `"Post.authorId": "User"` makes a created Post belong to that User's `posts`-like collections. */
+  relations?: Record<string, string>;
+  /** Where created entities go: the end of finite collections and the start of endless ones by default. */
+  position?: "start" | "end";
+}
+
+export type Spec = { [path: string]: FieldSpec | { poolSize?: number; endlessTotal?: number } | MutationSpec } & {
   $options?: { poolSize?: number; endlessTotal?: number };
+  $mutations?: MutationSpec;
 };
 
 export type Data = Record<string, unknown>;
@@ -98,6 +113,8 @@ export type ErrorCode =
   | "unused-spec-path"
   | "bad-suggestion"
   | "unsupported"
+  | "bad-mutation"
+  | "not-found"
   | "graphql"
   | "internal";
 
@@ -125,3 +142,44 @@ export declare function suggestSpec(
   query: string,
   opts: { llm: (prompt: string) => Promise<string>; spec?: Spec },
 ): Promise<Spec>;
+
+export type WorldEntry =
+  | { op: "pin"; type: string; key: string; fields: Record<string, unknown> }
+  | { op: "create"; type: string; key: string; fields: Record<string, unknown>; rel?: Array<{ ownerType: string; ownerKey: string }>; mutation?: string }
+  | { op: "update"; type: string; key: string; fields: Record<string, unknown>; rel?: Array<{ ownerType: string; ownerKey: string }>; mutation?: string }
+  | { op: "delete"; type: string; key: string; mutation?: string };
+
+export interface ExportedWorld {
+  seed: string | number;
+  spec?: Spec;
+  anchorDate: string;
+  locale: string;
+  log: WorldEntry[];
+}
+
+export interface WorldOptions {
+  seed?: string | number;
+  spec?: Spec;
+  anchorDate?: string | Date;
+  locale?: string;
+  strict?: boolean;
+  /** A log from `world.export()`; replayed at creation. */
+  log?: WorldEntry[];
+}
+
+export interface WorldResult {
+  data?: Data | null;
+  errors?: Array<{ message: string; locations?: Array<{ line: number; column: number }>; path?: Array<string | number>; extensions?: Record<string, unknown> }>;
+}
+
+export interface World {
+  /** Run a query or a mutation. Never throws for a bad operation: failures come back as `errors`. */
+  query(query: string | DocumentNode, options?: { variables?: Record<string, unknown>; operationName?: string }): WorldResult;
+  /** Override fields of the entity `"Type:key"`. */
+  pin(ref: string, fields: Record<string, unknown>): World;
+  export(): ExportedWorld;
+  reset(): World;
+}
+
+/** A persistent, deterministic world shared across queries. */
+export declare function createWorld(options?: WorldOptions): World;

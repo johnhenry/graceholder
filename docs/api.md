@@ -1,7 +1,7 @@
 # API reference
 
 ```js
-import { graceholder, inferSchema, suggestSpec, buildSuggestPrompt, GraceholderError, KEY_SCHEME } from "@johnhenry/graceholder";
+import { graceholder, createWorld, inferSchema, suggestSpec, buildSuggestPrompt, GraceholderError, KEY_SCHEME } from "@johnhenry/graceholder";
 ```
 
 ## `graceholder(query, options?)`
@@ -125,6 +125,48 @@ Generators are pure. Names are used by `@gen` and spec `gen`; an unknown name th
 | choice | `oneOf`, `pattern` |
 | graph | `count.of`, `order.subtotal`, `order.tax`, `order.total` (computed from the entity graph) |
 
+## `createWorld(options?)`
+
+A persistent, deterministic world shared across queries: pinned entities, and mutations that change what later queries see. Options: `seed`, `spec`, `anchorDate`, `locale`, `strict` (as for `graceholder`) and `log` (a previous `export().log`). With no pins and no mutations it answers exactly like `graceholder` with the same options.
+
+- `world.query(query, { variables, operationName })` runs a query or a mutation and returns a GraphQL result, `{ data }` or `{ data?, errors }`; it does not throw for a bad request (the graceholder code is in `errors[i].extensions.code`).
+- `world.pin("Type:key", { field: value })` overrides fields of one entity; `name`, `firstName` or `lastName` pins keep `email`, `username` and the other name fields coherent. Returns the world.
+- `world.export()` returns `{ seed, spec, anchorDate, locale, log }`; `createWorld(exported)` replays it to the identical state.
+- `world.reset()` clears every pin and mutation.
+
+Mutations have no schema, so they are read from the name and arguments: the first word of the field is the verb (`create`/`add`/`insert`, `update`/`edit`/`set`, `delete`/`remove`), the rest is the entity type (`createBlogPost` -> `BlogPost`), the fields come from `input` (or the arguments), the selection is the affected entity. Override with the spec's `$mutations` block: `verbs` (`{ archive: "delete" }`), `fields` (`{ signUp: { op: "create", type: "User" } }` with optional `idArg`, `input`, `read`), `relations` (`{ "Post.authorId": "User" }`) and `position` (`"start"` or `"end"`). The full rules are in the design document (section 16, World).
+
+```js
+import { createWorld } from "@johnhenry/graceholder";
+
+const world = createWorld({ seed: "demo", spec: { users: { count: 3 } } });
+world.pin("User:1", { name: "Alice Admin" });
+const made = world.query(`mutation { createUser(input: { name: "Bo Builder" }) { id name } }`);
+world.query(`mutation { deleteUser(id: 2) { id } }`);
+const { data } = world.query("{ users { id name email } }");
+console.log({ created: made.data.createUser.name, users: data.users.map((u) => [u.name, u.email]) });
+```
+
+```json
+{
+  "created": "Bo Builder",
+  "users": [
+    [
+      "Alice Admin",
+      "aliceadmin@example.org"
+    ],
+    [
+      "Bruno Marsh",
+      "bruno.marsh@example.org"
+    ],
+    [
+      "Bo Builder",
+      "bo.builder7@example.org"
+    ]
+  ]
+}
+```
+
 ## `suggestSpec(query, { llm, spec? })`
 
 An authoring-time helper. `llm` is `(prompt: string) => Promise<string>`. It builds a prompt (`buildSuggestPrompt(query, spec?)`) with the query, the inferred SDL and decisions, the spec grammar and the generator names, parses the reply (a bare JSON object, a fenced block or prose around a JSON object), and validates it: Spec schema, generator names, path syntax, conflicts, and paths that match no field. On failure it re-prompts once with the problems; then it throws `bad-suggestion` (`hint` lists the problems). The prompt wording is versioned (`SUGGEST_PROMPT_VERSION`) and is not part of the output-stability guarantee. `suggestSpec` is never called by generation.
@@ -136,7 +178,7 @@ An authoring-time helper. `llm` is `(prompt: string) => Promise<string>`. It bui
 | Code | When |
 |---|---|
 | `graphql` | parse, validation or execution errors from graphql-js |
-| `bad-operation` | missing or ambiguous operation, or not a query |
+| `bad-operation` | missing or ambiguous operation, or not a query (a world also runs mutations; subscriptions are never supported) |
 | `bad-options` | invalid `anchorDate`, `query` or `llm` |
 | `unknown-locale` | locale other than `en` |
 | `unknown-directive`, `bad-directive` | not a graceholder directive; malformed directive arguments |
@@ -145,6 +187,7 @@ An authoring-time helper. `llm` is `(prompt: string) => Promise<string>`. It bui
 | `conflicting-overrides`, `conflicting-shape` | `@list` with `@one`, different values in two places; a field used as both scalar and object |
 | `bad-derive` | cycle, self-derive or non-scalar source |
 | `bad-cursor`, `bad-arguments` | undecodable cursor; negative or non-integer sizes, `page < 1`, windows over 10000 |
+| `bad-mutation`, `not-found` | a world could not read a mutation (unknown verb, no identifying argument, duplicate id); update, delete or pin of a deleted entity |
 | `bad-suggestion` | `suggestSpec` reply still invalid after the repair round |
 | `unsupported` | several concrete types where one is required |
 | `internal` | a bug |
