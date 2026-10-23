@@ -174,6 +174,31 @@ console.log(createHash("sha256").update(out).digest("hex").slice(0, 16));
 "89e38df182d7c2c0"
 ```
 
+## Making the arithmetic visible
+
+Aggregates such as `subtotal`, `tax`, `total` and `xCount` are computed from latent values: every item has a quantity whether or not you select it, so adding or removing fields never changes a total. If you select only `price`, the prices need not add up to `subtotal`; select `quantity` as well to see why.
+
+```js
+import { graceholder } from "@johnhenry/graceholder";
+
+const order = graceholder("{ orders(first: 1) { subtotal items { price quantity } } }", { seed: "demo" }).orders[0];
+const hidden = graceholder("{ orders(first: 1) { subtotal items { price } } }", { seed: "demo" }).orders[0];
+const cents = (x) => Math.round(x * 100);
+console.log({
+  subtotal: order.subtotal,
+  sumOfPriceTimesQuantity: order.items.reduce((s, i) => s + cents(i.price) * i.quantity, 0) / 100,
+  sameSubtotalWithoutQuantity: hidden.subtotal === order.subtotal,
+});
+```
+
+```json
+{
+  "subtotal": 5452.87,
+  "sumOfPriceTimesQuantity": 5452.87,
+  "sameSubtotalWithoutQuantity": true
+}
+```
+
 ## Different data for one subtree
 
 `@seed` changes the data of a subtree and nothing else.

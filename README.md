@@ -148,13 +148,13 @@ console.log(data);
       "code": "ORD-60441",
       "status": "new",
       "note": "natus eu",
-      "total": 1648.59
+      "total": 5943.63
     },
     {
       "code": "ORD-17295",
       "status": "new",
       "note": null,
-      "total": 600.17
+      "total": 4317.75
     }
   ]
 }

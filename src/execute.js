@@ -123,6 +123,7 @@ export function run(inferred, opts) {
 
   /** Generate one scalar; `personaKey` is the entity whose persona slots the generator reads. */
   const scalar = (seed, f, parent, entityKey, fieldName, subKeys, personaKey = entityKey) => {
+    if (fieldName === "qty") fieldName = "quantity"; // one latent quantity per item, whichever name is selected
     if (f.derive !== undefined) return derived(seed, f, parent, entityKey, fieldName, subKeys, personaKey);
     if (f.gen === "count.of") return count(seed, parent, entityKey, f.genArgs.of, "");
     if (f.gen.startsWith("order.")) return orderMoney(seed, f.gen, parent, entityKey);
@@ -161,7 +162,7 @@ export function run(inferred, opts) {
     return value;
   };
 
-  /** subtotal = sum(items price [* quantity, when selected]) over the whole collection; total = subtotal + tax (integer cents). */
+  /** subtotal = sum(items price * latent quantity) over the whole collection; total = subtotal + tax (integer cents). */
   const orderMoney = (seed, gen, parent, entityKey) => {
     const itemsField = [...(inferred.model.get(parent)?.values() ?? [])].find(
       (x) => x.kind === "object" && x.list && !x.synthetic && ["items", "lines"].includes(tokenize(x.name).at(-1)),
@@ -172,16 +173,13 @@ export function run(inferred, opts) {
     const n = count(seed, parent, entityKey, itemsName, "");
     const keyOf = memberKeyFn(parent, entityKey, itemsName, "", itemsField ?? {});
     const price = fieldOrDefault(itemType, "price");
-    // quantity multiplies only when the item type selects it, so the subtotal always equals
-    // what the returned items add up to
-    const itemFields = inferred.model.get(itemType);
-    const qtyName = ["quantity", "qty"].find((q) => itemFields?.has(q));
-    const qty = qtyName ? itemFields?.get(qtyName) : undefined;
+    // every item has a latent quantity keyed by the item (the same value whether `quantity`, `qty`
+    // or nothing is selected), so aggregates never depend on the selection
+    const qty = fieldOrDefault(itemType, "quantity", "qty");
     let subCents = 0;
     for (let i = 1; i <= n; i++) {
       const member = keyOf(i);
-      const unit = Math.round(scalar(seed, price, itemType, member, "price") * 100);
-      subCents += qty ? unit * scalar(seed, qty, itemType, member, qtyName) : unit;
+      subCents += Math.round(scalar(seed, price, itemType, member, "price") * 100) * scalar(seed, qty, itemType, member, "quantity");
     }
     const taxCents = Math.round((subCents * keyStream(K(seed, "p", parent, entityKey, "taxRate")).int(0, 12)) / 100);
     if (gen === "order.subtotal") return subCents / 100;

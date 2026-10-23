@@ -73,29 +73,80 @@ test("connections follow the same rules", () => {
   assert.deepEqual(c.edges.map((e) => e.node.id), ["5", "6"]);
 });
 
-// ---- aggregates vs the returned list ------------------------------------------------
+// ---- aggregates use latent values -----------------------------------------------------
 
 const cents = (x) => Math.round(x * 100);
 
-test("an unwindowed items list is the whole collection: subtotal is the sum of what is returned", () => {
-  const Q = "{ orders(first: 6) { status total subtotal tax items { price } } }";
-  for (const o of run(Q).orders) {
-    const sum = o.items.reduce((s, i) => s + cents(i.price), 0);
-    assert.equal(cents(o.subtotal), sum);
-    assert.equal(cents(o.total), cents(o.subtotal) + cents(o.tax));
-  }
-  // the reported case
-  const one = run("{ orders(first: 1) { status total subtotal tax items { price } } }").orders[0];
-  assert.equal(cents(one.subtotal), one.items.reduce((s, i) => s + cents(i.price), 0));
-});
-
-test("with quantity selected, subtotal is the sum of price * quantity", () => {
-  for (const o of run("{ orders(first: 6) { subtotal tax total items { price quantity } } }").orders) {
+test("subtotal = sum(price * quantity) with a latent quantity, whatever is selected", () => {
+  const withQty = run("{ orders(first: 6) { subtotal tax total items { price quantity } } }").orders;
+  for (const o of withQty) {
     assert.equal(cents(o.subtotal), o.items.reduce((s, i) => s + cents(i.price) * i.quantity, 0));
     assert.equal(cents(o.total), cents(o.subtotal) + cents(o.tax));
   }
-  for (const o of run("{ orders(first: 4) { subtotal items { price qty } } }").orders) {
-    assert.equal(cents(o.subtotal), o.items.reduce((s, i) => s + cents(i.price) * i.qty, 0));
+  // the reported case: with only `price` selected the quantity is simply hidden
+  const only = run("{ orders(first: 6) { subtotal tax total items { price } } }").orders;
+  assert.deepEqual(only.map((o) => [o.subtotal, o.tax, o.total]), withQty.map((o) => [o.subtotal, o.tax, o.total]));
+  assert.deepEqual(only.map((o) => o.items.map((i) => i.price)), withQty.map((o) => o.items.map((i) => i.price)));
+});
+
+test("quantity and qty are the same latent value and selecting either changes nothing else", () => {
+  const variants = [
+    "items { price }",
+    "items { price quantity }",
+    "items { quantity price }",
+    "items { price qty }",
+    "items { name qty price description }",
+    "items(first: 1) { price }",
+    "",
+  ];
+  const results = variants.map((v) => run(`{ orders(first: 4) { subtotal tax total ${v} } }`).orders);
+  for (const r of results) assert.deepEqual(r.map((o) => [o.subtotal, o.tax, o.total]), results[0].map((o) => [o.subtotal, o.tax, o.total]));
+  const q = run("{ orders(first: 4) { items { quantity } } }").orders;
+  const qty = run("{ orders(first: 4) { items { qty } } }").orders;
+  assert.deepEqual(q.map((o) => o.items.map((i) => i.quantity)), qty.map((o) => o.items.map((i) => i.qty)));
+  const p = (r) => r.map((o) => o.items?.map((i) => i.price));
+  assert.deepEqual(p(results[0]), p(results[1]));
+  assert.deepEqual(p(results[1]), p(results[3]));
+});
+
+// deterministic subsets
+const lcg = (seed) => () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff), seed / 0x7fffffff);
+
+test("property: adding or removing fields never changes an aggregate", () => {
+  const rnd = lcg(7);
+  const orderExtra = ["id", "code", "status", "createdAt", "updatedAt", "customer { name email }", "notes { id }", "comments { id }"];
+  const itemsForms = [null, "items { price }", "items { price quantity }", "items { name }", "items { qty price }"];
+  const aggregates = ["subtotal", "tax", "total", "itemCount", "commentCount"];
+  const keep = (o) => ({ subtotal: o.subtotal, tax: o.tax, total: o.total, itemCount: o.itemCount, commentCount: o.commentCount });
+  const base = run("{ orders(first: 5) { subtotal tax total itemCount commentCount } }").orders.map(keep);
+  const prices = run("{ orders(first: 5) { items { price } } }").orders.map((o) => o.items.map((i) => i.price));
+  for (let trial = 0; trial < 60; trial++) {
+    const extra = orderExtra.filter(() => rnd() < 0.4);
+    const items = itemsForms[Math.floor(rnd() * itemsForms.length)];
+    if (items) extra.push(items);
+    // a random subset of the aggregates is always selected, in random order
+    const wanted = aggregates.filter(() => rnd() < 0.6);
+    const sel = [...new Set([...(wanted.length ? wanted : ["subtotal"]), ...extra])].sort(() => rnd() - 0.5);
+    const out = run(`{ orders(first: 5) { ${sel.join(" ")} } }`).orders;
+    for (const name of aggregates) if (sel.includes(name)) assert.deepEqual(out.map((o) => o[name]), base.map((o) => o[name]), `${name} in ${sel.join(" ")}`);
+    if (items?.includes("price")) assert.deepEqual(out.map((o) => o.items.map((i) => i.price)), prices);
+  }
+});
+
+test("property: xCount and totalX are the sibling list's total whatever else is selected", () => {
+  const rnd = lcg(11);
+  const base = run("{ posts { commentCount totalShares tagCount } }").posts;
+  const extras = ["id", "title", "body", "comments { id }", "comments(first: 1) { id text }", "shares { id }", "tags", "author { ... on User { name } }", "createdAt"];
+  for (let trial = 0; trial < 60; trial++) {
+    const picked = extras.filter(() => rnd() < 0.4);
+    const sel = ["commentCount", "totalShares", "tagCount", ...picked.filter((x) => !(x.startsWith("comments(") && picked.includes("comments { id }")))].sort(() => rnd() - 0.5);
+    const out = run(`{ posts { ${sel.join(" ")} } }`).posts;
+    assert.deepEqual(out.map((p) => [p.commentCount, p.totalShares, p.tagCount]), base.map((p) => [p.commentCount, p.totalShares, p.tagCount]), sel.join(" "));
+    for (const p of out) {
+      if (p.comments && !sel.some((x) => x.startsWith("comments("))) assert.equal(p.comments.length, p.commentCount);
+      if (p.shares) assert.equal(p.shares.length, p.totalShares);
+      if (p.tags) assert.equal(p.tags.length, p.tagCount);
+    }
   }
 });
 
