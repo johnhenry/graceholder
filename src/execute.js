@@ -46,17 +46,35 @@ export function windowOf(args, n, { connection, declared = false, endlessTotal =
   const total = connection ? endlessTotal : null;
   if (!paged) return finish({ start: 1, count: n, total: connection ? total : n, endless: Boolean(connection) });
 
-  if (has("page")) {
-    const size = nonNegInt(args, "pageSize") ?? nonNegInt(args, "perPage") ?? n;
+  // Exactly one size argument, one offset argument, and one style (page, offset or relay).
+  const sizeNames = ["first", "limit", "take", "pageSize", "perPage"].filter(has);
+  const offsetNames = ["offset", "skip"].filter(has);
+  const conflict = (why) => bad(`conflicting paging arguments (${why}): ${["first", "last", "after", "before", "offset", "skip", "limit", "take", "page", "pageSize", "perPage"].filter(has).join(", ")}`);
+  if (sizeNames.length > 1) throw conflict("one size argument only");
+  if (offsetNames.length > 1) throw conflict("one of offset or skip");
+  const pageStyle = has("page") || has("pageSize") || has("perPage");
+  if (pageStyle) {
+    if (!has("page")) throw conflict("pageSize/perPage need page");
+    if (offsetNames.length || has("last") || has("after") || has("before") || ["first", "limit", "take"].some(has)) throw conflict("page cannot be combined with other styles");
+  } else if (offsetNames.length) {
+    if (has("last") || has("after") || has("before")) throw conflict("offset/skip cannot be combined with cursors");
+  } else if (has("last") && sizeNames.length) {
+    throw conflict("last cannot be combined with a size");
+  } else if (!has("last") && (has("limit") || has("take")) && (has("after") || has("before"))) {
+    throw conflict("limit/take cannot be combined with cursors; use first");
+  }
+  const size = sizeNames.length ? nonNegInt(args, sizeNames[0]) : undefined;
+
+  if (pageStyle) {
     const page = nonNegInt(args, "page", 1);
-    return finish({ start: (page - 1) * size + 1, count: cap(size), total, endless: true });
+    const count = size ?? n;
+    return finish({ start: (page - 1) * count + 1, count: cap(count), total, endless: true });
   }
-  if (has("offset") || has("skip") || ((has("limit") || has("take")) && !has("first") && !has("last"))) {
-    const off = nonNegInt(args, "offset") ?? nonNegInt(args, "skip") ?? 0;
-    const size = nonNegInt(args, "limit") ?? nonNegInt(args, "take") ?? n;
-    return finish({ start: off + 1, count: cap(size), total, endless: true });
+  if (offsetNames.length || ((has("limit") || has("take")) && !has("last"))) {
+    const off = offsetNames.length ? nonNegInt(args, offsetNames[0]) : 0;
+    return finish({ start: off + 1, count: cap(size ?? n), total, endless: true });
   }
-  const first = nonNegInt(args, "first");
+  const first = size;
   const last = nonNegInt(args, "last");
   const after = has("after") ? decodeCursor(args.after) : undefined;
   const before = has("before") ? decodeCursor(args.before) : undefined;
@@ -143,7 +161,7 @@ export function run(inferred, opts) {
     return value;
   };
 
-  /** subtotal = sum(items price * quantity) over the whole collection; total = subtotal + tax (integer cents). */
+  /** subtotal = sum(items price [* quantity, when selected]) over the whole collection; total = subtotal + tax (integer cents). */
   const orderMoney = (seed, gen, parent, entityKey) => {
     const itemsField = [...(inferred.model.get(parent)?.values() ?? [])].find(
       (x) => x.kind === "object" && x.list && !x.synthetic && ["items", "lines"].includes(tokenize(x.name).at(-1)),
@@ -154,11 +172,16 @@ export function run(inferred, opts) {
     const n = count(seed, parent, entityKey, itemsName, "");
     const keyOf = memberKeyFn(parent, entityKey, itemsName, "", itemsField ?? {});
     const price = fieldOrDefault(itemType, "price");
-    const qty = fieldOrDefault(itemType, "quantity", "qty");
+    // quantity multiplies only when the item type selects it, so the subtotal always equals
+    // what the returned items add up to
+    const itemFields = inferred.model.get(itemType);
+    const qtyName = ["quantity", "qty"].find((q) => itemFields?.has(q));
+    const qty = qtyName ? itemFields?.get(qtyName) : undefined;
     let subCents = 0;
     for (let i = 1; i <= n; i++) {
       const member = keyOf(i);
-      subCents += Math.round(scalar(seed, price, itemType, member, "price") * 100) * scalar(seed, qty, itemType, member, "quantity");
+      const unit = Math.round(scalar(seed, price, itemType, member, "price") * 100);
+      subCents += qty ? unit * scalar(seed, qty, itemType, member, qtyName) : unit;
     }
     const taxCents = Math.round((subCents * keyStream(K(seed, "p", parent, entityKey, "taxRate")).int(0, 12)) / 100);
     if (gen === "order.subtotal") return subCents / 100;

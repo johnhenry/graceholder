@@ -140,12 +140,12 @@ test("total = subtotal + tax; subtotal = sum of items, independent of the window
   }
   const windowed = run("{ orders { id subtotal tax total items(first: 1) { price quantity } } }").orders;
   assert.deepEqual(windowed.map((o) => [o.subtotal, o.tax, o.total]), full.map((o) => [o.subtotal, o.tax, o.total]));
-  // totals do not need items to be selected
+  // totals do not need items to be selected: they assume the price-only items a later selection of `items { price }` shows
+  const priced = run("{ orders { id subtotal total items { price } } }").orders;
   const bare = run("{ orders { id subtotal total } }").orders;
-  assert.deepEqual(bare.map((o) => [o.subtotal, o.total]), full.map((o) => [o.subtotal, o.total]));
-  // and total alone still equals subtotal + tax
+  assert.deepEqual(bare.map((o) => [o.subtotal, o.total]), priced.map((o) => [o.subtotal, o.total]));
   const alone = run("{ orders { total } }").orders;
-  assert.deepEqual(alone.map((o) => o.total), full.map((o) => o.total));
+  assert.deepEqual(alone.map((o) => o.total), priced.map((o) => o.total));
 });
 
 test("prices are cents-based with two decimals", () => {
