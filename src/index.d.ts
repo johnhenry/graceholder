@@ -60,6 +60,7 @@ export interface Options {
    * lists and unions/interfaces come from it instead of from name heuristics.
    */
   schema?: SchemaInput;
+  /**
    * Edge-case mode(s), one name or an array: `empty`, `huge`, `nulls`, `unicode`, `boundary`, `errors`.
    * Applies to every field unless a spec entry sets its own `scenario`. Default none (output unchanged).
    */
