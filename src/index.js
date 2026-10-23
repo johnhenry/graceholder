@@ -38,6 +38,9 @@ export function graceholder(query, options = {}) {
     const inferred = infer(query, { operationName: options.operationName });
     const result = run(inferred, { seed: options.seed ?? DEFAULT_SEED, anchorMs: ms, variables: options.variables });
     if (result.errors?.length) {
+      // an error raised by one of our resolvers (bad cursor, bad arguments) keeps its own code
+      const own = result.errors.find((e) => e.originalError instanceof GraceholderError);
+      if (own) throw own.originalError;
       throw new GraceholderError("graphql", result.errors[0].message, { cause: result.errors[0], errors: result.errors });
     }
     // graphql-js builds null-prototype objects; hand back plain JSON-compatible data

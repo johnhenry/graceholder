@@ -1,0 +1,62 @@
+{
+  "name": "relay-connection",
+  "header": {
+    "locale": "en",
+    "keyScheme": "gh1"
+  },
+  "input": {
+    "query": "query Feed($after: String) {\n  posts(first: 3, after: $after) {\n    edges { cursor node { id title author { ... on User { id name } } } }\n    pageInfo { hasNextPage hasPreviousPage startCursor endCursor }\n    totalCount\n  }\n}",
+    "options": {
+      "seed": "relay",
+      "variables": {
+        "after": "Z2MxOjI"
+      }
+    }
+  },
+  "output": {
+    "posts": {
+      "edges": [
+        {
+          "cursor": "Z2MxOjM",
+          "node": {
+            "id": "3",
+            "title": "Dolore Velit Quas",
+            "author": {
+              "id": "6",
+              "name": "Ibrahim Olsen"
+            }
+          }
+        },
+        {
+          "cursor": "Z2MxOjQ",
+          "node": {
+            "id": "4",
+            "title": "Iste Accusantium Eu Consectetur",
+            "author": {
+              "id": "21",
+              "name": "Uma Castillo"
+            }
+          }
+        },
+        {
+          "cursor": "Z2MxOjU",
+          "node": {
+            "id": "5",
+            "title": "Enim Voluptate Id Mollitia",
+            "author": {
+              "id": "97",
+              "name": "Ngozi Xu"
+            }
+          }
+        }
+      ],
+      "pageInfo": {
+        "hasNextPage": true,
+        "hasPreviousPage": true,
+        "startCursor": "Z2MxOjM",
+        "endCursor": "Z2MxOjU"
+      },
+      "totalCount": 1000
+    }
+  }
+}

@@ -1,0 +1,60 @@
+{
+  "name": "identity-and-args",
+  "header": {
+    "locale": "en",
+    "keyScheme": "gh1"
+  },
+  "input": {
+    "query": "{\n  a: user(id: 5) { id name email }\n  b: user(id: 5) { name }\n  c: user(id: 6) { name }\n  open: tickets(status: \"OPEN\", offset: 2, limit: 3) { id title }\n  closed: tickets(status: \"CLOSED\", first: 2) { id title }\n  people(ids: [3, 9]) { id name }\n}",
+    "options": {
+      "seed": "ident"
+    }
+  },
+  "output": {
+    "a": {
+      "id": "5",
+      "name": "Gabriel Keller",
+      "email": "julia.dalton@example.com"
+    },
+    "b": {
+      "name": "Gabriel Keller"
+    },
+    "c": {
+      "name": "Beatrix Brooks"
+    },
+    "open": [
+      {
+        "id": "405065",
+        "title": "Aute Excepteur Qui Blanditiis Praesentium"
+      },
+      {
+        "id": "926060",
+        "title": "Tempor Ex Provident"
+      },
+      {
+        "id": "922306",
+        "title": "Dignissimos Ducimus Nostrud Adipiscing"
+      }
+    ],
+    "closed": [
+      {
+        "id": "565721",
+        "title": "Corrupti Similique Ex Unde Eu"
+      },
+      {
+        "id": "197694",
+        "title": "Ea Sint Dolore Enim"
+      }
+    ],
+    "people": [
+      {
+        "id": "3",
+        "name": "Tessa Mbeki"
+      },
+      {
+        "id": "9",
+        "name": "Keiko Kim"
+      }
+    ]
+  }
+}

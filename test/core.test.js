@@ -104,8 +104,8 @@ test("sibling add/remove invariance", () => {
 });
 
 test("unrelated variables and operation names do not change values", () => {
-  const a = run("query A($x: Int = 1) { posts(note: $x) { id title } }");
-  const b = run("query B($x: Int = 2, $y: String) { posts(note: $x, other: $y) { id title } }", { variables: { y: "z" } });
+  const a = run("query A($y: Boolean = true) { posts { id title @include(if: $y) } }");
+  const b = run("query B($y: Boolean = true, $z: Boolean = false) { posts { id title @include(if: $y) body @include(if: $z) } }", { variables: { z: false } });
   assert.equal(json(a), json(b));
   assert.equal(json(a), json(run("{ posts { id title } }")));
 });
