@@ -1,0 +1,32 @@
+{
+  "name": "mock-ql-sculptor",
+  "version": "0.0.2",
+  "description": "A library to transform GraphQL queries into mock data",
+  "main": "index.js",
+  "type": "module",
+  "bin": {
+    "mock-ql-sculptor": "./cli.js"
+  },
+  "scripts": {
+    "test": "node --test",
+    "start": "node cli.js"
+  },
+  "keywords": [
+    "graphql",
+    "mock",
+    "data",
+    "testing"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@snaplet/copycat": "^0.15.1",
+    "graphql-tag": "^2.12.6"
+  },
+  "devDependencies": {
+    "@types/node": "^18.0.0"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}
