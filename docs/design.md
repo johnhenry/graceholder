@@ -117,16 +117,11 @@ If the selection includes `id`, its value is `entityKey` coerced to the inferred
 
 Every object type has a **pool**: an endless sequence of entities with keys `1, 2, 3, ...` (decimal). A list field of type `T` is a **window** onto the collection `(parentIdentity, fieldName, args-except-paging)` of `T`:
 
-- Collection membership is *derived by key*, not stored. Member ordinal `i` (1-based) of collection `C` has entityKey = `i` for top-level collections shared by type (see 3.3), or `"<parentKey>/<fieldName>/<i>"`... **No**: to keep the same `User:42` identical everywhere, list members are always drawn from the **type pool**: member `i` of collection `C` is pool entity with key `poolIndex(C, i)`.
-- `poolIndex(C, i) = i` for top-level fields and for unscoped lists (collection-by-type pool); this is what makes `users` page 1 contain `User:1..N` and `posts{author}` refer to pool users.
-- A nested list that belongs to a parent (e.g. `user.posts`) uses a **per-parent child pool** keyed `"<parentType>:<parentKey>.<fieldName>"` as the typeName-scope extension; members are `Post` entities with keys `"<parentKey>.<fieldName>.<i>"`... to avoid two ways to say it, the rule is:
+- Collection membership is *derived by key*, not stored.
+- Rule E1: a list is **shared** (members come from the type pool; member `i` has key `String(i)`) when its collection is top-level (child of `Query`), or when `@type`/spec unified its element type with a type that has a top-level collection. Otherwise it is **owned**: members have key `"<parentKey>.<fieldName>.<i>"`.
+- Rule E2: a singular object field with no identifying argument is a *reference into the type pool*: key = `String(int(h, 1, poolSize))`, `poolSize` default 100 (`$options.poolSize`), with `h` drawn from key `("l", parentType, parentKey, fieldName)`. Top-level singular fields with no identifying argument use key `1`. So `post.author` typed `User` is one of `User:1..100`, stable, and equal to `user(id: 7)` when it lands on 7.
 
-> **Rule E1.** A list is *shared* (members come from the type pool, key = index) when its collection is top-level (child of `Query`) or the spec/directive says `shared`/`@type` unified it with a top-level collection. Otherwise it is *owned* (members have key `"<parentKey>.<fieldName>.<i>"`, type = element type).
-> **Rule E2.** A singular object field reached with no identifying argument is *owned* by default: key = `"<parentKey>.<fieldName>"` for non-`Query` parents; for `Query` it is the pool entity `1`. With `@type("User")` or a spec `type`, it is *shared*: key = `String(int(h, 1, poolSize))` where `poolSize = 100` (a spec-settable default) with `h` drawn from key `(seed, "l", parentType, parentKey, fieldName)`. So `post.author` with `@type("User")` is one of `User:1..100`, stable, and equals `user(id: 7)` when it lands on 7.
-
-This makes the default (query-alone, no unification) predictable: nothing is shared unless you say so or an argument identifies it. Open question 2 asks whether to share by inferred type name by default instead (the original brief: "object fields with an inferred type share a pool by type name").
-
-**Decision for v1:** follow the brief. *Inferred* object types of the same name share the type pool: `post.author` and `comment.author` inferred as `Author` share `Author`'s pool unless made owned by `@one(owned)`. To keep that from being surprising, `inferSchema` reports each sharing decision (`source:"heuristic"`, `rule:"E2-shared"`). The E2 "owned" behavior above applies only when the inferred type name is unique in the operation (it cannot collide with anything), where owned vs. shared is indistinguishable in practice except for `id` values. Therefore the observable rule is simply: **same type name + same key = same entity; singular object fields pick a key from the type pool `1..poolSize` (default 100) via the keyed hash of the parent; top-level singular fields without args use key 1.**
+**Decision for v1 (follows the brief):** same type name + same key = same entity. Inferred object types of the same name share the type pool (`post.author` and `comment.author` both inferred as `Author` draw from `Author:1..poolSize`). `inferSchema` reports each sharing decision (`rule: "E2-shared"`). Open question 2 asks whether the default should instead be owned.
 
 ### 3.3 Collection size and windowing
 
@@ -184,7 +179,7 @@ Evaluated top to bottom; first matching rule wins. "Name" is the *field* name (n
 |---|---|---|
 | L1 | Directive/spec `@list`/`@one`/`list`/`one` | as given |
 | L2 | Has paging argument (`first`, `last`, `limit`, `offset`, `skip`, `take`, `page`, `after`) | list (or connection if S3) |
-| L3 | Last word of name is plural (ends `s` but not `ss`/`us`/`is`, or in irregular list: `people`, `children`, `men`, `women`, `mice`, `data`? no: `data` is singular) | list |
+| L3 | Last word of name is plural (ends `s` but not `ss`/`us`/`is`, or is an irregular plural: `people`, `children`, `men`, `women`, `mice`; `data` is singular) | list |
 | L4 | Name is `items`, `nodes`, `edges`, `results`, `list`, `all*` | list |
 | L5 | Has an argument named `ids` or an argument of list literal type (`[..]`) | list |
 | L6 | Otherwise | one |
@@ -201,7 +196,7 @@ Scalars follow L1, L3-L5 too: `tags` and `emails` are lists of `String`.
 | N4 | Collision: two fields infer the same name but have different field sets | They are merged (same type name = same type), the union of fields |
 | N5 | Name collides with a built-in scalar or `Query` | suffix `Type` |
 
-Singularize (frozen, small, no dependency): irregular table (`people->person`, `men->man`, `women->woman`, `children->child`, `mice->mouse`, `feet->foot`, `teeth->tooth`, `geese->goose`, `analyses->analysis`, `indices->index`, `criteria->criterion`, `data->datum` is NOT applied; `data` stays `Data`); `ies -> y` (`stories->story`; not after a vowel: `movies->movie`); `(s|x|z|ch|sh)es -> $1` (`boxes->box`, `addresses->address`, `watches->watch`); `ves -> f`? (not applied; `ves -> ve`: `leaves->leave`? **Decision:** only `ves->f` for `knives,wives,leaves,lives,shelves,wolves` listed in the irregular table); `ss`/`us`/`is` endings unchanged; trailing `s -> ''`. Rules live in one frozen module and are covered by golden tests.
+Singularize (frozen, small, no dependency), applied to the last word of the tokenised name, first match wins: (1) irregular table: `people->person`, `men->man`, `women->woman`, `children->child`, `mice->mouse`, `feet->foot`, `teeth->tooth`, `geese->goose`, `analyses->analysis`, `indices->index`, `criteria->criterion`, `knives->knife`, `wives->wife`, `leaves->leaf`, `lives->life`, `shelves->shelf`, `wolves->wolf`; `data` is treated as singular and unchanged; (2) `ies -> y` unless preceded by a vowel (`stories->story`, `movies->movie`); (3) `(s|x|z|ch|sh)es -> $1` (`boxes->box`, `addresses->address`, `watches->watch`); (4) endings `ss`, `us`, `is` unchanged; (5) trailing `s` removed. The rules live in one frozen module and are covered by golden tests.
 
 **Count (lists):**
 
@@ -354,7 +349,7 @@ Every generator's output for a given draw sequence and vocabulary is frozen at 1
 ### 7.1 Vocabularies: vendored, not depended on
 
 - First/last names, cities/states/countries/zip prefixes, domains, job titles, industries, product nouns, lorem words, status/role vocab: small curated JSON tables **vendored into the repo** (`src/vocab/en/*.ts`), order-frozen, with SHA-256 checksums asserted in a test. Sizes are modest (~500 names each, ~200 places, ~1500 words): all original or public-domain/CC0 data (US Census name lists are public domain; place data from public domain sources; lorem words are the classical ipsum list). Provenance and licence recorded in `src/vocab/PROVENANCE.md`.
-- Vocabulary tables are **append-only within a major version**? No: appending changes `int(n, 0, len-1)` mapping, so **any** vocabulary edit is an output change (major). Tables are therefore frozen at 1.0.0.
+- Vocabulary tables are not append-only: `pick` maps by index and length. Appending would change the index mapping, so tables are frozen at 1.0.0 and any edit is an output change.
 - Why not `@faker-js/faker` or `@snaplet/copycat` as a runtime dependency: their dictionaries change in minor versions, they are large (browser bundle size), and their determinism is by their own design, not ours. We can still use them as *authoring-time* sources to generate our vendored tables (a one-off script, not a dependency).
 
 ## 8. Execution pipeline
@@ -410,7 +405,7 @@ The prompt template is versioned and exported; its wording is not part of the ou
 - inference rules: shape, type-name, count, scalar-type or generator selection for a previously inferred case; the singularizer; persona table; derivation formulas; paging and cursor formats; `anchorDate` default;
 - changes to how directives/spec properties resolve (precedence).
 
-**Not output changes (minor/patch):** new generators, new directives or spec properties, new locales, newly *recognised* name heuristics for names that currently fall through to the `T13` default? **No** (that changes output): new heuristics are output changes. Only strictly additive features that cannot affect existing inputs qualify: new generator names, new opt-in directives/options, new locales, error-message wording, performance, types, docs, the `suggestSpec` prompt.
+**Not output changes (minor/patch):** new generators, new directives or spec properties, new locales, error-message wording, performance, types, docs and the `suggestSpec` prompt. (newly recognised name heuristics are output changes, even for names that currently fall through to `T13`). Only strictly additive features that cannot affect existing inputs qualify.
 
 **Enforcement:**
 - Golden files: `test/golden/*.json` (input query + spec + options + expected output). CI runs them on Node 22 and the current LTS, and in a browser-like runner (Node with `--experimental-vm-modules` jsdom-free check is enough; plus a Playwright smoke in M5). A PR that changes a golden file requires the `breaking` label and a changeset marked major; a CI script fails otherwise.
