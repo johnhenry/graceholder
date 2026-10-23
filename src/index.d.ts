@@ -56,7 +56,7 @@ export interface MutationSpec {
   position?: "start" | "end";
 }
 
-export type Spec = { [path: string]: FieldSpec | { poolSize?: number; endlessTotal?: number } } & {
+export type Spec = { [path: string]: FieldSpec | { poolSize?: number; endlessTotal?: number } | MutationSpec } & {
   $options?: { poolSize?: number; endlessTotal?: number };
   $mutations?: MutationSpec;
 };
