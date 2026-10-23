@@ -8,7 +8,7 @@ from, a third-party dataset (in particular not from faker, whose data files are 
   facts typed in by hand; coordinates are approximate city centres rounded to 0.01 degree and are
   placeholders, not for navigation. Time zones are IANA names. Phone templates use each country's calling
   code; the US and Canada use the fictional `555-01xx` block, the United Kingdom the Ofcom drama ranges
-  (`020 7946 0xxx`, `0161 496 0xxx`, ...), Australia the ACMA `5550 xxxx` block, and France `01 99 00 xx xx`.
+  (`020 7946 0xxx`, `0161 496 0xxx`, ...) and Australia the ACMA `5550 xxxx` block. Paris uses `01 99 00 xx xx`, which is believed to be France's reserved fiction range but was not checked against a source.
   Other countries' templates are well-formed but not guaranteed unassigned. Cities are real, so use them
   as place names only.
 - **commerce.** Categories, product nouns and adjectives are ordinary English words. Brand names are

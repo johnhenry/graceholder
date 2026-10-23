@@ -364,6 +364,7 @@ test("a world applies packs, images and distributions to every query, pins inclu
   const exported = world.export();
   assert.deepEqual([exported.packs, exported.images, exported.distributions], [["geo", "finance"], "svg", "realistic"]);
   assert.deepEqual(createWorld(exported).query(q).data, data);
-  assert.deepEqual(Object.keys(createWorld({ seed: "plain" }).export()), ["seed", "anchorDate", "locale", "log"].filter((k) => k !== "spec").concat([]).length ? Object.keys(createWorld({ seed: "plain" }).export()) : []);
+  const plain = createWorld({ seed: "plain" }).export();
+  assert.ok(!("packs" in plain) && !("images" in plain) && !("distributions" in plain), "defaults are not exported");
   assert.throws(() => createWorld({ images: "gif" }), (e) => e.code === "bad-options");
 });
