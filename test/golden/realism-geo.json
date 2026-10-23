@@ -1,0 +1,116 @@
+{
+  "name": "realism-geo: coherent places, coordinates, time zones, postal and phone formats",
+  "header": {
+    "locale": "en",
+    "keyScheme": "gh1"
+  },
+  "input": {
+    "query": "{ users(first: 6) { id fullName city state country zip timezone phone address { street city latitude longitude } } }",
+    "options": {
+      "seed": "realism",
+      "packs": [
+        "geo"
+      ]
+    }
+  },
+  "output": {
+    "users": [
+      {
+        "id": "1",
+        "fullName": "Nadia Silva",
+        "city": "Portland",
+        "state": "Oregon",
+        "country": "United States",
+        "zip": "97251",
+        "timezone": "America/Los_Angeles",
+        "phone": "+1 503-555-0108",
+        "address": {
+          "street": "595 River Ct",
+          "city": "Portland",
+          "latitude": 45.5048,
+          "longitude": -122.7163
+        }
+      },
+      {
+        "id": "2",
+        "fullName": "Kai Bauer",
+        "city": "Zaragoza",
+        "state": "Aragon",
+        "country": "Spain",
+        "zip": "50517",
+        "timezone": "Europe/Madrid",
+        "phone": "+34 970 920 842",
+        "address": {
+          "street": "140 Railroad Ln",
+          "city": "Zaragoza",
+          "latitude": 41.6824,
+          "longitude": -0.7915
+        }
+      },
+      {
+        "id": "3",
+        "fullName": "Wei Underwood",
+        "city": "Wellington",
+        "state": "Wellington",
+        "country": "New Zealand",
+        "zip": "6132",
+        "timezone": "Pacific/Auckland",
+        "phone": "+64 4 861 8130",
+        "address": {
+          "street": "404 Railroad Ln",
+          "city": "Wellington",
+          "latitude": -41.1913,
+          "longitude": 174.6985
+        }
+      },
+      {
+        "id": "4",
+        "fullName": "Zoë Tanaka",
+        "city": "Mexico City",
+        "state": "Mexico City",
+        "country": "Mexico",
+        "zip": "06202",
+        "timezone": "America/Mexico_City",
+        "phone": "+52 55 2688 1300",
+        "address": {
+          "street": "826 Pine Ln",
+          "city": "Mexico City",
+          "latitude": 19.4268,
+          "longitude": -99.1095
+        }
+      },
+      {
+        "id": "5",
+        "fullName": "Tomas Hansen",
+        "city": "Denver",
+        "state": "Colorado",
+        "country": "United States",
+        "zip": "80259",
+        "timezone": "America/Denver",
+        "phone": "+1 303-555-0108",
+        "address": {
+          "street": "72 Maple Blvd",
+          "city": "Denver",
+          "latitude": 39.6647,
+          "longitude": -104.9821
+        }
+      },
+      {
+        "id": "6",
+        "fullName": "Samuel Patel",
+        "city": "Osaka",
+        "state": "Osaka",
+        "country": "Japan",
+        "zip": "530-4408",
+        "timezone": "Asia/Tokyo",
+        "phone": "+81 6-9809-6987",
+        "address": {
+          "street": "360 Main Ct",
+          "city": "Osaka",
+          "latitude": 34.6966,
+          "longitude": 135.4831
+        }
+      }
+    ]
+  }
+}

@@ -242,13 +242,48 @@ console.log(data.users.slice(0, 2));
 
 See [docs/api.md](docs/api.md#createworldoptions) for the mutation rules.
 
+## More realistic data (opt-in)
+
+Domain packs, heavy-tailed distributions, time series and SVG placeholders are all off by default, so existing output never moves. Packs are separate imports, so you only ship the ones you use.
+
+```js
+import { graceholder } from "@johnhenry/graceholder";
+import { geo } from "@johnhenry/graceholder/packs/geo";
+import { commerce } from "@johnhenry/graceholder/packs/commerce";
+
+const data = graceholder("{ user(id: 1) { fullName city country timezone phone avatar } product { name category price } }", {
+  packs: [geo, commerce],
+  images: "svg",
+  distributions: "realistic",
+});
+console.log({ ...data.user, avatar: data.user.avatar.slice(0, 40) + "...", product: data.product });
+```
+
+```json
+{
+  "fullName": "Miles Tanaka",
+  "city": "Leeds",
+  "country": "United Kingdom",
+  "timezone": "Europe/London",
+  "phone": "+44 113 496 0314",
+  "avatar": "data:image/svg+xml;charset=utf-8,%3Csvg%...",
+  "product": {
+    "name": "Maplecrest Foldable Whiteboard",
+    "category": "Office",
+    "price": 165.55
+  }
+}
+```
+
+See [Packs, distributions and images](docs/api.md#packs) in the API reference and the [cookbook](docs/cookbook.md#realistic-data).
+
 ## Determinism and stability
 
 The key scheme, hash (XXH64), generator (SplitMix64), vocabulary and inference rules are frozen at 1.0.0; see [STABILITY.md](STABILITY.md). Golden files in `test/golden` pin the output, are checked on Node 22 and 24, and are reproduced in a browser-like VM and in headless Chromium.
 
 ## Size
 
-The whole library with `graphql` bundled, minified, is about 200 kB (about 58 kB gzipped). `graphql` is the bulk of it; graceholder itself is a small part.
+The whole library with `graphql` bundled, minified, is about 213 kB (about 62 kB gzipped). `graphql` is the bulk of it; graceholder itself is a small part. The vocabulary packs are separate modules (minified and gzipped: `geo` 5.0 kB, `commerce` 2.1 kB, `finance` 2.3 kB, `health` 1.4 kB) that are only included when imported.
 
 ## Development
 

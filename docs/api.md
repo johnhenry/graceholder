@@ -1,7 +1,7 @@
 # API reference
 
 ```js
-import { graceholder, createWorld, inferSchema, suggestSpec, buildSuggestPrompt, GraceholderError, KEY_SCHEME } from "@johnhenry/graceholder";
+import { graceholder, createWorld, inferSchema, registerPack, suggestSpec, buildSuggestPrompt, GraceholderError, KEY_SCHEME } from "@johnhenry/graceholder";
 ```
 
 ## `graceholder(query, options?)`
@@ -17,11 +17,14 @@ import { graceholder, createWorld, inferSchema, suggestSpec, buildSuggestPrompt,
 | `strict` | `false` | A spec path that matches no field throws `unused-spec-path` instead of being reported. |
 | `locale` | `"en"` | The only bundled locale is `en`; anything else throws `unknown-locale`. |
 | `anchorDate` | `"2025-01-01T00:00:00.000Z"` | ISO string or `Date`. All dates are generated relative to it; the clock is never read. |
+| `packs` | none | [Vocabulary packs](#packs): names of registered packs or objects imported from `@johnhenry/graceholder/packs/<name>`. |
+| `images` | `"url"` | `"svg"` returns deterministic [inline SVG data URIs](#images) for image fields. |
+| `distributions` | `"uniform"` | `"realistic"` makes popularity fields heavy-tailed and turns `...History`/`...Series` fields into [time series](#distributions-and-time-series). |
 | `errors` | `"throw"` | `"result"` returns `{ data }` on success and `{ errors }` for GraphQL parse, validation and execution errors (other graceholder errors always throw). |
 
 ## `inferSchema(query, spec?, options?)`
 
-Returns `{ sdl, decisions, document }` without generating data. `sdl` is accepted by graphql-js `buildSchema`. `document` is the selected operation and the fragments it uses with graceholder's directives removed. `options` takes `operationName`, `variables` and `strict`.
+Returns `{ sdl, decisions, document }` without generating data. `sdl` is accepted by graphql-js `buildSchema`. `document` is the selected operation and the fragments it uses with graceholder's directives removed. `options` takes `operationName`, `variables`, `strict`, `packs`, `images` and `distributions` (inference depends on `packs` and `distributions`).
 
 Each decision is `{ path, field, kind, value, source, rule? }`:
 
@@ -121,6 +124,8 @@ Generators are pure. Names are used by `@gen` and spec `gen`; an unknown name th
 | company and product | `company.name`, `company.domain`, `company.industry`, `product.name` |
 | place | `place.city`, `place.state`, `place.country`, `place.zip`, `place.street`, `place.address`, `place.lat`, `place.lng` |
 | web | `url`, `imageUrl`, `ip`, `hex`, `color` |
+| images | `image.avatar` (initials on a coloured square, `size` 16-1024), `image.geometric` (`width`, `height`): inline SVG data URIs, see [Images](#images) |
+| series | `series.date`, `series.value` (see [time series](#distributions-and-time-series)) |
 | time | `datetime`, `time.created`, `time.updated`, `time.published`, `time.deleted`, `time.birthday` |
 | choice | `oneOf`, `pattern` |
 | graph | `count.of`, `order.subtotal`, `order.tax`, `order.total` (computed from the entity graph) |
@@ -167,9 +172,90 @@ console.log({ created: made.data.createUser.name, users: data.users.map((u) => [
 }
 ```
 
+## Distributions and time series
+
+`int`, `float` and `money` take a `dist` argument. Each value is sampled from its own per-value stream, so a value never depends on any other value, and sampling is bounded to `[min, max]`.
+
+| `dist` | Shape | Arguments |
+|---|---|---|
+| `uniform` (default) | flat | none |
+| `normal` | Box-Muller, truncated to `[min, max]` by rejection | `mean` (midpoint), `sd` (range / 6) |
+| `lognormal` | `ln(x - min + 1)` is normal, truncated to the support | `mu` (0.35 `ln(range + 1)`), `sigma` (`ln(range + 1)` / 6.5) |
+| `powerlaw` | density proportional to `y^-alpha` for `y = x - min + 1`, inverse CDF | `alpha` (2) |
+| `zipf` | integers; rank `k` has probability proportional to `k^(1-s) - (k+1)^(1-s)`, value `min + k - 1`, inverse CDF | `s` (1.1) |
+
+Only `+ - * /`, `sqrt` and the series in `src/detmath.js` are used (never `Math.exp`/`log`/`pow`/`sin`/`cos`, which engines may round differently), so the output is byte-identical on every runtime.
+
+```js
+import { graceholder } from "@johnhenry/graceholder";
+
+const spec = { "videos.views": { gen: { name: "int", args: { min: 0, max: 1000000, dist: "lognormal" } } } };
+console.log(graceholder("{ videos(first: 5) { id views } }", { spec, seed: "dist" }).videos.map((v) => v.views));
+```
+
+```json
+[
+  57,
+  1526,
+  651,
+  1829,
+  5
+]
+```
+
+With `distributions: "realistic"` (opt-in, because it changes existing output):
+
+- popularity fields are heavy-tailed integers: `views`, `impressions`, `plays`, `reads`, `clicks`, `likes`, `shares` (lognormal), `followers`, `subscribers`, `stars`, `downloads` (powerlaw) and `sales` (zipf), including `viewCount`, `likeCount`, `totalLikes` and the like. A scalar `followers` or `sales` is a number, not a list of words. Rule `T8` in the decisions.
+- a field whose name ends in `history`, `series`, `timeline` or `trend` and that selects an object (`salesHistory { date value }`) is a list (rule `L7`) of 14 to 60 daily points. In its element type, `date`, `day`, `at`, `time`, `timestamp`, `month`, `week` get `series.date` (ascending, the last point is the anchor day) and `value`, `amount`, `count`, `total`, `price`, `balance`, `volume`, `sales`, `revenue`, `views`, ... get `series.value` (rule `T14`): a base level with a linear trend, a weekly/biweekly/monthly seasonal wave and noise, all keyed by the owning entity and field, so a series is the same whatever else is selected.
+
+`series.value` arguments: `base`, `trend` (relative change over the series), `season` (relative amplitude), `period` (days), `noise` (relative), and `min`/`max` bounds.
+
+## Images
+
+`images: "svg"` turns the fields that infer to `imageUrl` (`avatar`, `image`, `photo`, `thumbnail`, `picture`, `logo`, and `...Url` forms) into inline `data:image/svg+xml;charset=utf-8,...` URIs: no network, no clock. Fields named `avatar`, `profile`, `headshot` or `portrait` get initials on a coloured square, taken from the same persona slots as the entity's name (organizations use their company name); everything else gets a geometric placeholder of three to five translucent shapes. The markup uses only `rect`, `circle`, `polygon` and `text` (no scripts, images or external references). The default `"url"` keeps the example URLs.
+
+## Packs
+
+Vocabulary packs add domain data that stays coherent per entity. They are separate modules, so an application ships only the ones it imports, and they are off unless you pass them:
+
+```js
+import { graceholder } from "@johnhenry/graceholder";
+import { geo } from "@johnhenry/graceholder/packs/geo";
+import { finance } from "@johnhenry/graceholder/packs/finance";
+
+const { user } = graceholder("{ user(id: 3) { city state country zip timezone phone iban currency } }", { packs: [geo, finance], seed: "packs" });
+console.log(user);
+```
+
+```json
+{
+  "city": "Honolulu",
+  "state": "Hawaii",
+  "country": "United States",
+  "zip": "96813",
+  "timezone": "Pacific/Honolulu",
+  "phone": "+1 808-555-0129",
+  "iban": "PL86295177803152611444814766",
+  "currency": "USD"
+}
+```
+
+`import { allPacks } from "@johnhenry/graceholder/packs"` is every pack. Call `registerPack(geo)` once to refer to a pack by name (`packs: ["geo"]`); an unknown name throws `unknown-pack`. Pack names are global, so a different pack under a used name throws `bad-pack`. When two packs define one generator the later pack in the list wins. Pack rules (inference by field name) are reported as rule `P1` and, like every heuristic, lose to directives and the spec; generator names such as `geo.timezone` or `finance.iban` work in `@gen` and in the spec only while the pack is enabled.
+
+| Pack | Field names it recognises | Coherence |
+|---|---|---|
+| `geo` (about 110 real cities in 18 countries) | `city`, `state`, `country`, `zip`/`postal*`/`postcode`, `street`, `address`, `phone`/`mobile`, `lat`/`latitude`, `lng`/`lon`/`longitude`, `timezone`/`tz`, `region`, `regionCode`, `countryCode`, `callingCode` | One persona slot picks a city, so region, country, coordinates (within 0.1 degrees of the city), IANA time zone, postal code (the country's format starting with the city's prefix) and phone (country calling code and area code) agree. A nested `address`, `location`, `coordinates` or `geo` type shares its parent's place. US and Canadian numbers use `555-01xx`, GB the Ofcom drama ranges and AU `5550 xxxx`; other countries' numbers are well-formed but not guaranteed unassigned. |
+| `commerce` | `category`/`department`, `brand`/`manufacturer`, `sku`, `price`, and the `name` of product-like types | Name = brand + adjective + a noun of the category; the SKU prefix and the price band belong to the category. Brands are invented. `price` bands feed order totals exactly as before (aggregates use the same latent values whatever is selected). |
+| `finance` | `iban`, `bic`/`swift`, `cardNumber`, `routingNumber`, `accountNumber`, `accountType`, `transactionType`, `merchant`, `currency`, `currencyName`, `currencySymbol` | IBANs have the right length, character classes and valid ISO 13616 mod-97 check digits for 14 countries; card numbers pass Luhn; routing numbers pass the ABA 3-7-1 checksum; the IBAN country and currency agree, and with `geo` enabled they follow the entity's place. National check parts inside an IBAN (FR, IT, ES) are random. Not for testing against real payment systems. |
+| `health` | `condition`/`diagnosis`, `medication`/`drug`, `dosage`, `specialty`, `severity`, `mrn` | **Fictional only.** Invented conditions and medications (`Marmalade Fever`, `Jamzolve`) that each carry a `(fictional)` tag (disable with `tag: false`), record numbers start with `FX-`. Medication and specialty belong to the condition. Not medical information. |
+
+Pack generators: `geo` overrides `place.city`, `place.state`, `place.country`, `place.zip`, `place.street`, `place.address`, `place.lat`, `place.lng` and `person.phone`, and adds `geo.region`, `geo.regionCode`, `geo.countryCode`, `geo.callingCode`, `geo.timezone`. `commerce`: `commerce.category`, `commerce.brand`, `commerce.product`, `commerce.sku`, `commerce.price`. `finance`: `finance.iban`, `finance.bic`, `finance.cardNumber`, `finance.routingNumber`, `finance.accountNumber`, `finance.accountType`, `finance.transactionType`, `finance.merchant`, `finance.currency`, `finance.currencyName`, `finance.currencySymbol`. `health`: `health.condition`, `health.medication`, `health.dosage`, `health.specialty`, `health.severity`, `health.recordNumber`.
+
+Vocabulary is hand-written, checksummed in tests and recorded in `src/packs/PROVENANCE.md`; like every table it is frozen at 1.0.0.
+
 ## `suggestSpec(query, { llm, spec? })`
 
-An authoring-time helper. `llm` is `(prompt: string) => Promise<string>`. It builds a prompt (`buildSuggestPrompt(query, spec?)`) with the query, the inferred SDL and decisions, the spec grammar and the generator names, parses the reply (a bare JSON object, a fenced block or prose around a JSON object), and validates it: Spec schema, generator names, path syntax, conflicts, and paths that match no field. On failure it re-prompts once with the problems; then it throws `bad-suggestion` (`hint` lists the problems). The prompt wording is versioned (`SUGGEST_PROMPT_VERSION`) and is not part of the output-stability guarantee. `suggestSpec` is never called by generation.
+An authoring-time helper. `llm` is `(prompt: string) => Promise<string>`. It builds a prompt (`buildSuggestPrompt(query, spec?)`) with the query, the inferred SDL and decisions, the spec grammar and the generator names, parses the reply (a bare JSON object, a fenced block or prose around a JSON object), and validates it: Spec schema, generator names, path syntax, conflicts, and paths that match no field. Pass the `packs`, `distributions` and `images` you generate with so the prompt lists the pack generators and the validation accepts them. On failure it re-prompts once with the problems; then it throws `bad-suggestion` (`hint` lists the problems). The prompt wording is versioned (`SUGGEST_PROMPT_VERSION`) and is not part of the output-stability guarantee. `suggestSpec` is never called by generation.
 
 ## Errors
 
@@ -179,7 +265,7 @@ An authoring-time helper. `llm` is `(prompt: string) => Promise<string>`. It bui
 |---|---|
 | `graphql` | parse, validation or execution errors from graphql-js |
 | `bad-operation` | missing or ambiguous operation, or not a query (a world also runs mutations; subscriptions are never supported) |
-| `bad-options` | invalid `anchorDate`, `query` or `llm` |
+| `bad-options` | invalid `anchorDate`, `query`, `llm`, `images`, `distributions` or `packs` |
 | `unknown-locale` | locale other than `en` |
 | `unknown-directive`, `bad-directive` | not a graceholder directive; malformed directive arguments |
 | `unknown-generator`, `bad-generator-args` | unknown name (with hint); `min > max`, bad pattern, ... |
@@ -188,6 +274,7 @@ An authoring-time helper. `llm` is `(prompt: string) => Promise<string>`. It bui
 | `bad-derive` | cycle, self-derive or non-scalar source |
 | `bad-cursor`, `bad-arguments` | undecodable cursor; negative or non-integer sizes, `page < 1`, windows over 10000 |
 | `bad-mutation`, `not-found` | a world could not read a mutation (unknown verb, no identifying argument, duplicate id); update, delete or pin of a deleted entity |
+| `unknown-pack`, `bad-pack` | `packs` names a pack that is not registered; an invalid pack, or a different pack under a used name |
 | `bad-suggestion` | `suggestSpec` reply still invalid after the repair round |
 | `unsupported` | several concrete types where one is required |
 | `internal` | a bug |

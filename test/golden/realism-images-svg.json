@@ -1,0 +1,35 @@
+{
+  "name": "realism-images-svg: deterministic inline SVG placeholders",
+  "header": {
+    "locale": "en",
+    "keyScheme": "gh1"
+  },
+  "input": {
+    "query": "{ users(first: 2) { fullName avatar thumbnail } companies(first: 1) { name logo avatar } }",
+    "options": {
+      "seed": "realism",
+      "images": "svg"
+    }
+  },
+  "output": {
+    "users": [
+      {
+        "fullName": "Nadia Silva",
+        "avatar": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='128'%20height='128'%20viewBox='0%200%20128%20128'%20role='img'%20aria-label='NS'%3E%3Crect%20width='128'%20height='128'%20fill='%230969da'/%3E%3Ctext%20x='64'%20y='64'%20dy='.35em'%20text-anchor='middle'%20font-family='sans-serif'%20font-size='54'%20fill='%23fff'%3ENS%3C/text%3E%3C/svg%3E",
+        "thumbnail": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='320'%20height='240'%20viewBox='0%200%20320%20240'%20role='img'%20aria-label='placeholder'%3E%3Crect%20width='320'%20height='240'%20fill='%230f766e'/%3E%3Crect%20x='278'%20y='11'%20width='76'%20height='53'%20fill='%23cf222e'%20fill-opacity='0.76'/%3E%3Crect%20x='-68'%20y='143'%20width='172'%20height='120'%20fill='%231a7f37'%20fill-opacity='0.73'/%3E%3Cpolygon%20points='227%2C145%20286%2C263%20168%2C263'%20fill='%23cf222e'%20fill-opacity='0.62'/%3E%3Cpolygon%20points='196%2C-41%20263%2C93%20129%2C93'%20fill='%230969da'%20fill-opacity='0.78'/%3E%3Ccircle%20cx='107'%20cy='107'%20r='90'%20fill='%233b6ea5'%20fill-opacity='0.39'/%3E%3C/svg%3E"
+      },
+      {
+        "fullName": "Kai Bauer",
+        "avatar": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='128'%20height='128'%20viewBox='0%200%20128%20128'%20role='img'%20aria-label='KB'%3E%3Crect%20width='128'%20height='128'%20fill='%230f766e'/%3E%3Ctext%20x='64'%20y='64'%20dy='.35em'%20text-anchor='middle'%20font-family='sans-serif'%20font-size='54'%20fill='%23fff'%3EKB%3C/text%3E%3C/svg%3E",
+        "thumbnail": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='320'%20height='240'%20viewBox='0%200%20320%20240'%20role='img'%20aria-label='placeholder'%3E%3Crect%20width='320'%20height='240'%20fill='%23bc4c00'/%3E%3Ccircle%20cx='86'%20cy='192'%20r='95'%20fill='%231f6feb'%20fill-opacity='0.46'/%3E%3Ccircle%20cx='309'%20cy='56'%20r='47'%20fill='%23bc4c00'%20fill-opacity='0.45'/%3E%3Cpolygon%20points='174%2C166%20234%2C286%20114%2C286'%20fill='%233b6ea5'%20fill-opacity='0.60'/%3E%3C/svg%3E"
+      }
+    ],
+    "companies": [
+      {
+        "name": "Ironwood Labs",
+        "logo": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='320'%20height='240'%20viewBox='0%200%20320%20240'%20role='img'%20aria-label='placeholder'%3E%3Crect%20width='320'%20height='240'%20fill='%233b6ea5'/%3E%3Crect%20x='-21'%20y='5'%20width='138'%20height='97'%20fill='%23cf222e'%20fill-opacity='0.38'/%3E%3Crect%20x='158'%20y='159'%20width='90'%20height='63'%20fill='%231f6feb'%20fill-opacity='0.66'/%3E%3Crect%20x='142'%20y='-29'%20width='188'%20height='132'%20fill='%231f6feb'%20fill-opacity='0.70'/%3E%3Crect%20x='179'%20y='193'%20width='72'%20height='50'%20fill='%230f766e'%20fill-opacity='0.70'/%3E%3C/svg%3E",
+        "avatar": "data:image/svg+xml;charset=utf-8,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='128'%20height='128'%20viewBox='0%200%20128%20128'%20role='img'%20aria-label='IL'%3E%3Crect%20width='128'%20height='128'%20fill='%23bc4c00'/%3E%3Ctext%20x='64'%20y='64'%20dy='.35em'%20text-anchor='middle'%20font-family='sans-serif'%20font-size='54'%20fill='%23fff'%3EIL%3C/text%3E%3C/svg%3E"
+      }
+    ]
+  }
+}

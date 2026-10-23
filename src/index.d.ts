@@ -19,7 +19,43 @@ export interface Options {
   spec?: Spec;
   /** Make a spec path that matches no field an error (`unused-spec-path`) instead of a reported decision. */
   strict?: boolean;
+  /**
+   * Vocabulary packs to enable, by registered name or as objects imported from
+   * `@johnhenry/graceholder/packs/<name>`. Default none. Packs add coherent geo, commerce, finance and
+   * (fictional) health data; see docs/api.md. Pass `["geo"]` only after `registerPack(geo)`.
+   */
+  packs?: Array<string | Pack>;
+  /**
+   * `"svg"` makes image, avatar, thumbnail, picture, photo and logo fields deterministic inline SVG data
+   * URIs (initials avatars, geometric placeholders) instead of example URLs. Default `"url"`.
+   */
+  images?: "url" | "svg";
+  /**
+   * `"realistic"` makes popularity-like fields (views, likes, followers, sales, ...) heavy-tailed and
+   * turns fields named like `salesHistory { date value }` into time series. Default `"uniform"` (the 0.x behaviour).
+   */
+  distributions?: "uniform" | "realistic";
 }
+
+/** Distribution names accepted by the `dist` argument of `int`, `float` and `money`. */
+export type Distribution = "uniform" | "normal" | "lognormal" | "zipf" | "powerlaw";
+
+/** A vocabulary pack: frozen tables plus the generators and name rules that use them. */
+export interface Pack {
+  readonly name: string;
+  readonly version: number;
+  readonly vocab: Readonly<Record<string, readonly unknown[]>>;
+  /** SDL scalar type of generators whose output is not a String. */
+  readonly types?: Readonly<Record<string, "Int" | "Float" | "Boolean" | "DateTime" | "String">>;
+  generators(vocab: Record<string, any>, base: Record<string, (ctx: any) => unknown>): Record<string, (ctx: any) => unknown>;
+  rules?(ctx: { tokens: string[]; first: string; last: string; kind: string; typeName: string; list: boolean }): { sdl: string; gen: string; args?: Record<string, unknown>; nullable?: boolean } | null;
+  inherit?(typeName: string): boolean;
+}
+
+/** Make a pack addressable by name in `options.packs`. Registering the same pack twice is fine. */
+export declare function registerPack(pack: Pack): Pack;
+/** Names of the packs registered so far. */
+export declare function registeredPacks(): string[];
 
 export type Count = number | [number, number] | { min: number; max: number };
 
@@ -93,7 +129,7 @@ export interface InferResult {
 export declare function inferSchema(
   query: string | DocumentNode,
   spec?: Spec,
-  options?: Pick<Options, "operationName" | "variables" | "strict">,
+  options?: Pick<Options, "operationName" | "variables" | "strict" | "packs" | "images" | "distributions">,
 ): InferResult;
 
 export type ErrorCode =
@@ -112,6 +148,8 @@ export type ErrorCode =
   | "conflicting-overrides"
   | "unused-spec-path"
   | "bad-suggestion"
+  | "bad-pack"
+  | "unknown-pack"
   | "unsupported"
   | "bad-mutation"
   | "not-found"
@@ -131,7 +169,7 @@ export declare class GraceholderError extends Error {
 export declare const SUGGEST_PROMPT_VERSION: string;
 
 /** The prompt `suggestSpec` sends (query, inferred SDL and decisions, spec grammar, generator names). */
-export declare function buildSuggestPrompt(query: string, spec?: Spec): string;
+export declare function buildSuggestPrompt(query: string, spec?: Spec, options?: Pick<Options, "packs" | "distributions" | "images">): string;
 
 /**
  * Authoring-time helper: ask an injected model for a spec, validate it against the query, and offer
@@ -140,7 +178,7 @@ export declare function buildSuggestPrompt(query: string, spec?: Spec): string;
  */
 export declare function suggestSpec(
   query: string,
-  opts: { llm: (prompt: string) => Promise<string>; spec?: Spec },
+  opts: { llm: (prompt: string) => Promise<string>; spec?: Spec } & Pick<Options, "packs" | "distributions" | "images">,
 ): Promise<Spec>;
 
 export type WorldEntry =
@@ -154,6 +192,10 @@ export interface ExportedWorld {
   spec?: Spec;
   anchorDate: string;
   locale: string;
+  /** Present only when the world was created with these options; packs are exported by name (use `registerPack` before replaying). */
+  packs?: string[];
+  images?: "url" | "svg";
+  distributions?: "uniform" | "realistic";
   log: WorldEntry[];
 }
 
@@ -163,6 +205,10 @@ export interface WorldOptions {
   anchorDate?: string | Date;
   locale?: string;
   strict?: boolean;
+  /** Same meaning as in {@link Options}; they apply to every query of the world. */
+  packs?: Array<string | Pack>;
+  images?: "url" | "svg";
+  distributions?: "uniform" | "realistic";
   /** A log from `world.export()`; replayed at creation. */
   log?: WorldEntry[];
 }

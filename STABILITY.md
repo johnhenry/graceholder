@@ -9,9 +9,11 @@ The key-scheme version literal is exported as `KEY_SCHEME` (currently `"gh1"`).
 **What counts as an output change (needs a major bump):**
 - the key scheme (`gh1` literal, separator, component set or order), hash, RNG, helper formulas (`int`, `pick`, etc.);
 - any generator's value for the same draws; generator catalogue *semantics* changes;
-- any vocabulary table edit, reorder or locale default change;
+- any vocabulary table edit, reorder or locale default change, including every table of every pack (section 17);
 - inference rules: shape, type-name, count, scalar-type or generator selection for a previously inferred case; the singularizer; persona table; derivation formulas; paging and cursor formats; `anchorDate` default;
 - changes to how directives/spec properties resolve (precedence).
+
+**Opt-in realism (section 17):** `packs`, `images: "svg"` and `distributions: "realistic"` default to off, so a release that adds one cannot change existing output; once released, their output is frozen like everything else.
 
 **Not output changes (minor/patch):** new generators, new directives or spec properties, new locales, error-message wording, performance, types, docs and the `suggestSpec` prompt. (newly recognised name heuristics are output changes, even for names that currently fall through to `T13`). Only strictly additive features that cannot affect existing inputs qualify.
 

@@ -260,6 +260,132 @@ const spec = await suggestSpec(query, { llm: async (prompt) => (await client.com
 
 Because the reply is validated against the query before it is returned, a bad suggestion fails loudly (`bad-suggestion`) instead of producing silently wrong data.
 
+## Realistic data
+
+Pick the realism you want; everything is off by default and every value is still a function of its key.
+
+Coherent places: city, region, country, time zone, postal code, phone and coordinates come from one row.
+
+```js
+import { graceholder } from "@johnhenry/graceholder";
+import { geo } from "@johnhenry/graceholder/packs/geo";
+
+const { users } = graceholder("{ users(first: 3) { city country zip timezone phone address { city latitude longitude } } }", { packs: [geo], seed: "demo" });
+console.log(users);
+```
+
+```json
+[
+  {
+    "city": "Montreal",
+    "country": "Canada",
+    "zip": "H2Y 5Q3",
+    "timezone": "America/Toronto",
+    "phone": "+1 514-555-0120",
+    "address": {
+      "city": "Montreal",
+      "latitude": 45.5282,
+      "longitude": -73.6064
+    }
+  },
+  {
+    "city": "San Diego",
+    "country": "United States",
+    "zip": "92191",
+    "timezone": "America/Los_Angeles",
+    "phone": "+1 619-555-0171",
+    "address": {
+      "city": "San Diego",
+      "latitude": 32.639,
+      "longitude": -117.173
+    }
+  },
+  {
+    "city": "Houston",
+    "country": "United States",
+    "zip": "77003",
+    "timezone": "America/Chicago",
+    "phone": "+1 713-555-0142",
+    "address": {
+      "city": "Houston",
+      "latitude": 29.8382,
+      "longitude": -95.4092
+    }
+  }
+]
+```
+
+Heavy-tailed popularity and a price history with trend and seasonality:
+
+```js
+import { graceholder } from "@johnhenry/graceholder";
+
+const out = graceholder("{ video { views likes priceHistory(first: 4) { date value } } }", { distributions: "realistic", seed: "demo" });
+console.log(out);
+```
+
+```json
+{
+  "video": {
+    "views": 168,
+    "likes": 108,
+    "priceHistory": [
+      {
+        "date": "2024-12-02T00:00:00.000Z",
+        "value": 510.34
+      },
+      {
+        "date": "2024-12-03T00:00:00.000Z",
+        "value": 649.01
+      },
+      {
+        "date": "2024-12-04T00:00:00.000Z",
+        "value": 820.15
+      },
+      {
+        "date": "2024-12-05T00:00:00.000Z",
+        "value": 951.57
+      }
+    ]
+  }
+}
+```
+
+Placeholder images that need no network and show the user's own initials:
+
+```js
+import { graceholder } from "@johnhenry/graceholder";
+
+const { user } = graceholder("{ user(id: 2) { fullName avatar } }", { images: "svg", seed: "demo" });
+console.log({ name: user.fullName, svg: decodeURIComponent(user.avatar.split(",")[1]).match(/>([^<]+)<\/text>/)[1] });
+```
+
+```json
+{
+  "name": "Hector Østergaard",
+  "svg": "HØ"
+}
+```
+
+Account data with valid checksums (IBAN mod 97, Luhn card numbers) that agrees with the user's country:
+
+```js
+import { graceholder } from "@johnhenry/graceholder";
+import { geo } from "@johnhenry/graceholder/packs/geo";
+import { finance } from "@johnhenry/graceholder/packs/finance";
+
+console.log(graceholder("{ user(id: 5) { country iban currency cardNumber } }", { packs: [geo, finance], seed: "demo" }).user);
+```
+
+```json
+{
+  "country": "Canada",
+  "iban": "ES8646327987591789769386",
+  "currency": "CAD",
+  "cardNumber": "4576526188713879"
+}
+```
+
 ## In the browser
 
 The package is plain ES modules with no Node built-ins; any bundler works. The test suite bundles it with esbuild and checks that a browser-like VM and headless Chromium reproduce every golden byte for byte.

@@ -7,9 +7,21 @@ import { fileURLToPath } from "node:url";
 
 export const GOLDEN_DIR = fileURLToPath(new URL("./golden/", import.meta.url));
 
-export async function bundle({ minify = false } = {}) {
+/**
+ * The library as one browser script. With `packs` (default) every vocabulary pack is bundled and
+ * registered, because goldens name packs by string; the size report uses `packs: false`.
+ */
+export async function bundle({ minify = false, packs = true } = {}) {
+  const index = fileURLToPath(new URL("../src/index.js", import.meta.url));
+  const packIndex = fileURLToPath(new URL("../src/packs/index.js", import.meta.url));
   const r = await build({
-    entryPoints: [fileURLToPath(new URL("../src/index.js", import.meta.url))],
+    stdin: {
+      contents: packs
+        ? `export * from ${JSON.stringify(index)};\nimport { registerPack } from ${JSON.stringify(index)};\nimport { allPacks } from ${JSON.stringify(packIndex)};\nfor (const p of allPacks) registerPack(p);`
+        : `export * from ${JSON.stringify(index)};`,
+      resolveDir: fileURLToPath(new URL("..", import.meta.url)),
+      loader: "js",
+    },
     bundle: true,
     format: "iife",
     globalName: "Graceholder",

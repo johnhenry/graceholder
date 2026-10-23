@@ -31,6 +31,16 @@ test("docs/api.md documents every generator, directive and error code", () => {
   for (const c of errorCodes) assert.ok(api.includes(`\`${c}\``), `error code ${c}`);
 });
 
+test("docs/api.md documents every pack generator and every pack", async () => {
+  const api = read("docs/api.md");
+  const { allPacks } = await import("../src/packs/index.js");
+  const { LOCALES } = await import("../src/vocab/en.js");
+  for (const pack of allPacks) {
+    assert.ok(api.includes(`\`${pack.name}\``), `pack ${pack.name}`);
+    for (const name of Object.keys(pack.generators({ ...LOCALES.en, ...pack.vocab }, {}))) assert.ok(api.includes(`\`${name}\``), `pack generator ${name}`);
+  }
+});
+
 test("STABILITY.md is generated from the design's stability section", () => {
   assert.equal(read("STABILITY.md"), stabilityText());
   assert.match(read("STABILITY.md"), /byte-identical/);

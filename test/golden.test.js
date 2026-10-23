@@ -4,6 +4,10 @@ import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { listGoldens, readGolden, actualOutput } from "./golden-harness.js";
 import * as gh from "../src/index.js";
+import { allPacks } from "../src/packs/index.js";
+
+// goldens name packs by string
+for (const pack of allPacks) gh.registerPack(pack);
 
 const dir = fileURLToPath(new URL("./golden/", import.meta.url));
 const files = existsSync(dir) ? listGoldens(dir) : [];

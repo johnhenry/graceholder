@@ -4,6 +4,10 @@
 // changes another. Output for a given draw sequence and vocabulary is FROZEN at 1.0.0.
 import { LOCALES } from "./vocab/en.js";
 import { GraceholderError } from "./errors.js";
+import { distArgs, sampleInt, sampleReal, normal01 } from "./dist.js";
+import { sin, TWO_PI } from "./detmath.js";
+import { avatarSvg, geometricSvg, svgDataUri, PALETTE } from "./image.js";
+import { personaKind, tokenize } from "./naming.js";
 
 const DAY_MS = 86400000;
 const YEAR_MS = 365.25 * DAY_MS;
@@ -15,6 +19,8 @@ const ALNUM = LOWER + UPPER + "0123456789";
 const cap = (s) => s[0].toUpperCase() + s.slice(1);
 const pad = (n, w) => String(n).padStart(w, "0");
 const badArgs = (name, msg) => new GraceholderError("bad-generator-args", `${name}: ${msg}`);
+
+const AVATAR_WORDS = new Set(["avatar", "profile", "headshot", "portrait"]);
 
 const SPECIAL_FOLD = { "ø": "o", "Ø": "o", "ł": "l", "Ł": "l", "æ": "ae", "Æ": "ae", "ß": "ss", "đ": "d", "ð": "d", "þ": "th" };
 
@@ -72,7 +78,7 @@ const updatedAge = (ctx) => {
 };
 
 /** @param {typeof LOCALES.en} V */
-function buildRegistry(V) {
+function buildBase(V) {
   const wordList = (s, n) => Array.from({ length: n }, () => s.pick(V.words));
   const sentence = (s) => cap(wordList(s, s.int(6, 14)).join(" ")) + ".";
   const sentences = (s, n) => Array.from({ length: n }, () => sentence(s)).join(" ");
@@ -91,7 +97,7 @@ function buildRegistry(V) {
   const orgName = (ctx) => `${ctx.slot("orgHead").pick(V.companyHeads)} ${ctx.slot("orgSuffix").pick(V.companySuffixes)}`;
   const age = (ctx) => ctx.slot("age").int(18, 90);
 
-  return {
+  const registry = {
     // ids
     "id.key": ({ entityKey, stream }) => (/^[0-9]+$/.test(entityKey) ? entityKey : String(stream.int(1, 999999))),
     "id.uuid": ({ stream: s }) => {
@@ -109,11 +115,15 @@ function buildRegistry(V) {
     // numbers
     int: ({ stream: s, args }) => {
       const [min, max] = range("int", args, 0, 100);
-      return s.int(min, max);
+      const dist = distArgs("int", args);
+      if (dist === "uniform") return s.int(min, max);
+      return sampleInt(s, dist, Math.ceil(min), Math.floor(max), args);
     },
     float: ({ stream: s, args }) => {
       const [min, max] = range("float", args, 0, 1);
       const decimals = intArg("float", args, "decimals", 2);
+      const dist = distArgs("float", args);
+      if (dist !== "uniform") return Math.min(max, Math.max(min, round(sampleReal(s, dist, min, max, args), decimals)));
       return Math.min(max, Math.max(min, round(min + s.float() * (max - min), decimals)));
     },
     // whole cents; endings .00, .99, .49 or any cents, weighted
@@ -121,6 +131,8 @@ function buildRegistry(V) {
       const [min, max] = range("money", args, 1, 100);
       const lo = Math.round(min * 100);
       const hi = Math.round(max * 100);
+      const dist = distArgs("money", args);
+      if (dist !== "uniform") return Math.min(hi, Math.max(lo, Math.round(sampleReal(s, dist, min, max, args) * 100))) / 100;
       const minD = Math.ceil(min);
       const maxD = Math.floor(max);
       if (maxD < minD) return s.int(lo, hi) / 100;
@@ -187,7 +199,26 @@ function buildRegistry(V) {
     "place.lng": ({ stream: s }) => round(-180 + s.float() * 360, 4),
     // web
     url: ({ stream: s }) => `https://${s.pick(V.emailDomains)}/${s.pick(V.words)}-${s.pick(V.words)}`,
-    imageUrl: ({ stream: s }) => `https://images.example.org/${hexString(s, 12)}.png`,
+    imageUrl: (ctx) => {
+      if (ctx.images === "svg") return registry["image.svg"](ctx);
+      return `https://images.example.org/${hexString(ctx.stream, 12)}.png`;
+    },
+    // option images: "svg": avatars show the entity's initials, everything else is a geometric placeholder
+    "image.svg": (ctx) => (tokenize(ctx.fieldName).some((t) => AVATAR_WORDS.has(t)) ? registry["image.avatar"](ctx) : registry["image.geometric"](ctx)),
+    "image.avatar": (ctx) => {
+      const size = intArg("image.avatar", ctx.args, "size", 128);
+      if (!Number.isInteger(size) || size < 16 || size > 1024) throw badArgs("image.avatar", "size must be an integer from 16 to 1024");
+      const org = personaKind(ctx.typeName) === "org";
+      const a = org ? ctx.slot("orgHead").pick(V.companyHeads) : first(ctx);
+      const b = org ? ctx.slot("orgSuffix").pick(V.companySuffixes) : last(ctx);
+      return svgDataUri(avatarSvg(a, b, ctx.slot("avatarColor").int(0, PALETTE.length - 1), size));
+    },
+    "image.geometric": ({ stream: s, args }) => {
+      const w = intArg("image.geometric", args, "width", 320);
+      const h = intArg("image.geometric", args, "height", 240);
+      if (!Number.isInteger(w) || !Number.isInteger(h) || w < 16 || h < 16 || w > 4096 || h > 4096) throw badArgs("image.geometric", "width and height must be integers from 16 to 4096");
+      return svgDataUri(geometricSvg(s, w, h));
+    },
     ip: ({ stream: s }) => [s.int(1, 254), s.int(0, 254), s.int(0, 254), s.int(1, 254)].join("."),
     hex: ({ stream: s, args }) => hexString(s, intArg("hex", args, "length", 16)),
     color: ({ stream: s }) => s.pick(V.colors),
@@ -211,6 +242,28 @@ function buildRegistry(V) {
       return new Date(ctx.anchorMs - (u - ctx.slot("deleted").int(0, u))).toISOString();
     },
     "time.birthday": (ctx) => new Date(ctx.anchorMs - Math.floor(age(ctx) * YEAR_MS) - ctx.slot("birthDay").int(0, 364) * DAY_MS).toISOString(),
+    // time series: one series per owning entity and field, one point per list element
+    "series.date": ({ anchorMs, series }) => {
+      const { i, n } = series ?? { i: 1, n: 1 };
+      return new Date(Math.floor(anchorMs / DAY_MS) * DAY_MS - (n - i) * DAY_MS).toISOString();
+    },
+    "series.value": ({ stream, args, series, slot }) => {
+      const { i, n, slot: ss } = series ?? { i: 1, n: 1, slot };
+      const min = args.min;
+      const max = args.max;
+      if ((min !== undefined || max !== undefined) && (!Number.isFinite(min) || !Number.isFinite(max) || min > max)) throw badArgs("series.value", "min and max must both be numbers with min <= max");
+      const base = args.base ?? (min === undefined ? 10 + ss("base").float() * 990 : min + (0.25 + 0.5 * ss("base").float()) * (max - min));
+      const trend = args.trend ?? -0.3 + 1.1 * ss("trend").float();
+      const amp = args.season ?? 0.05 + 0.25 * ss("amp").float();
+      const period = args.period ?? ss("period").pick([7, 14, 30]);
+      const noise = args.noise ?? 0.04 + 0.08 * ss("noise").float();
+      const phase = ss("phase").float();
+      const t = n > 1 ? (i - 1) / (n - 1) : 0;
+      const z = Math.min(3, Math.max(-3, normal01(stream)));
+      const v = Math.max(0, base * (1 + trend * t) * (1 + amp * sin(TWO_PI * ((i - 1) / period + phase))) * (1 + noise * z));
+      const out = round(v, 2);
+      return min === undefined ? out : Math.min(max, Math.max(min, out));
+    },
     // choice
     oneOf: ({ stream: s, args }) => {
       if (args.vocab !== undefined) {
@@ -228,23 +281,33 @@ function buildRegistry(V) {
     },
     pattern: ({ stream: s, args }) => pattern("pattern", args.p, s),
   };
+  return registry;
 }
 
 /** Names that are computed by the executor (they need the entity graph), not by a pure generator. */
 export const GRAPH_GENERATORS = Object.freeze(["count.of", "order.subtotal", "order.tax", "order.total"]);
 
 const REGISTRIES = new Map();
-function registryFor(locale) {
-  let r = REGISTRIES.get(locale);
+/** Generators of one locale plus the generators of the given packs (a later pack overrides an earlier one). */
+function registryFor(locale, packs = []) {
+  const key = `${locale}|${packs.map((p) => p.name).join(",")}`;
+  let r = REGISTRIES.get(key);
   if (!r) {
     if (!Object.hasOwn(LOCALES, locale)) throw new GraceholderError("unknown-locale", `unknown locale ${JSON.stringify(locale)}`);
-    r = buildRegistry(LOCALES[locale]);
-    REGISTRIES.set(locale, r);
+    r = buildBase(LOCALES[locale]);
+    for (const pack of packs) Object.assign(r, pack.generators({ ...LOCALES[locale], ...pack.vocab }, r));
+    REGISTRIES.set(key, r);
   }
   return r;
 }
 
-export const GENERATOR_NAMES = Object.freeze([...Object.keys(registryFor("en")), ...GRAPH_GENERATORS]);
+export const GENERATOR_NAMES = Object.freeze([...Object.keys(registryFor("en")), ...GRAPH_GENERATORS].filter((n) => n !== "image.svg"));
+
+/** Generator names available with the given packs (the pack generators are included). */
+export function generatorNames(packs = []) {
+  if (packs.length === 0) return GENERATOR_NAMES;
+  return [...new Set([...GENERATOR_NAMES, ...Object.keys(registryFor("en", packs))])].filter((n) => n !== "image.svg");
+}
 
 function distance(a, b) {
   const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
@@ -258,25 +321,27 @@ function distance(a, b) {
 }
 
 /** Nearest known generator name, for "did you mean" hints. */
-export function nearestGenerator(name) {
-  let best = GENERATOR_NAMES[0];
-  for (const n of GENERATOR_NAMES) if (distance(name, n) < distance(name, best)) best = n;
+export function nearestGenerator(name, names = GENERATOR_NAMES) {
+  let best = names[0];
+  for (const n of names) if (distance(name, n) < distance(name, best)) best = n;
   return best;
 }
 
 /**
  * @typedef {{ stream: import("./rng.js").Stream, slot: (name: string) => import("./rng.js").Stream,
  *             anchorMs: number, args: Record<string, any>, typeName: string, entityKey: string,
- *             fieldName: string, locale?: string }} GeneratorContext
+ *             fieldName: string, locale?: string, images?: "url"|"svg", packs?: any[],
+ *             series?: { i: number, n: number, slot: (name: string) => import("./rng.js").Stream } }} GeneratorContext
  * @param {string} name
  * @param {GeneratorContext} ctx
  */
 export function generate(name, ctx) {
-  const registry = registryFor(ctx.locale ?? "en");
+  const registry = registryFor(ctx.locale ?? "en", ctx.packs);
   const fn = Object.hasOwn(registry, name) ? registry[name] : undefined;
   if (!fn) {
+    const names = generatorNames(ctx.packs);
     throw new GraceholderError("unknown-generator", `unknown generator ${JSON.stringify(name)}`, {
-      hint: `did you mean ${JSON.stringify(nearestGenerator(name))}? Known: ${GENERATOR_NAMES.join(", ")}`,
+      hint: `did you mean ${JSON.stringify(nearestGenerator(name, names))}? Known: ${names.join(", ")}`,
     });
   }
   return fn(ctx);

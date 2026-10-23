@@ -1,0 +1,77 @@
+{
+  "name": "realism-distributions: heavy-tailed popularity and time series",
+  "header": {
+    "locale": "en",
+    "keyScheme": "gh1"
+  },
+  "input": {
+    "query": "{ posts(first: 5) { id viewCount likes followers sales } product { salesHistory(first: 5) { date value } } }",
+    "options": {
+      "seed": "realism",
+      "distributions": "realistic"
+    }
+  },
+  "output": {
+    "posts": [
+      {
+        "id": "1",
+        "viewCount": 1341,
+        "likes": 497,
+        "followers": 1,
+        "sales": 19
+      },
+      {
+        "id": "2",
+        "viewCount": 2524,
+        "likes": 1117,
+        "followers": 0,
+        "sales": 0
+      },
+      {
+        "id": "3",
+        "viewCount": 241,
+        "likes": 61,
+        "followers": 0,
+        "sales": 4
+      },
+      {
+        "id": "4",
+        "viewCount": 92,
+        "likes": 86,
+        "followers": 1,
+        "sales": 15266
+      },
+      {
+        "id": "5",
+        "viewCount": 1364,
+        "likes": 40,
+        "followers": 1,
+        "sales": 3
+      }
+    ],
+    "product": {
+      "salesHistory": [
+        {
+          "date": "2024-11-09T00:00:00.000Z",
+          "value": 896.25
+        },
+        {
+          "date": "2024-11-10T00:00:00.000Z",
+          "value": 1043.95
+        },
+        {
+          "date": "2024-11-11T00:00:00.000Z",
+          "value": 1059.35
+        },
+        {
+          "date": "2024-11-12T00:00:00.000Z",
+          "value": 1061.14
+        },
+        {
+          "date": "2024-11-13T00:00:00.000Z",
+          "value": 1068.98
+        }
+      ]
+    }
+  }
+}

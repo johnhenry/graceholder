@@ -10,6 +10,7 @@ import { isDeepStrictEqual } from "node:util";
 export const DOC_FILES = ["README.md", "docs/api.md", "docs/cookbook.md"];
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const SRC = pathToFileURL(join(ROOT, "src", "index.js")).href;
+const PACKS = pathToFileURL(join(ROOT, "src", "packs")).href;
 const FENCE = /^```(\w+)?[^\n]*\n([\s\S]*?)^```[ \t]*$/gm;
 
 /** @returns {{ lang: string, body: string, start: number, end: number, bodyStart: number, bodyEnd: number }[]} */
@@ -24,7 +25,13 @@ export function blocks(markdown) {
 
 async function runBlock(code, dir, n) {
   const file = join(dir, `example-${n}.mjs`);
-  writeFileSync(file, code.replaceAll("@johnhenry/graceholder", SRC));
+  writeFileSync(
+    file,
+    code
+      .replace(/@johnhenry\/graceholder\/packs\/(\w+)/g, (_, name) => `${PACKS}/${name}.js`)
+      .replace(/@johnhenry\/graceholder\/packs(?=["'])/g, `${PACKS}/index.js`)
+      .replaceAll("@johnhenry/graceholder", SRC),
+  );
   const logged = [];
   const real = console.log;
   console.log = (...args) => logged.push(args[0]);

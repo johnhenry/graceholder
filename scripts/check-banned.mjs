@@ -15,6 +15,8 @@ export const BANNED = [
   [/process\s*\.\s*env\b/, "process.env"],
   [/\btoLocale\w*\s*\(/, "toLocale*()"],
   [/\bIntl\s*\./, "Intl"],
+  // engines may differ in the last bit of these; src/detmath.js builds what is needed from + - * /
+  [/\bMath\s*\.\s*(exp|expm1|log|log1p|log2|log10|pow|sin|cos|tan|asin|acos|atan|atan2|sinh|cosh|tanh|asinh|acosh|atanh|cbrt|hypot)\b/, "Math.<transcendental>"],
 ];
 
 /** Remove block comments and line comments (a `//` preceded by whitespace or at line start). */

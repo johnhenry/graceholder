@@ -24,3 +24,14 @@ const errs: string[] = (wr.errors ?? []).map((e) => e.message);
 const exported: ExportedWorld = world.pin("User:1", { name: "A" }).export();
 const again: World = createWorld(exported);
 void [errs, again.reset()];
+import { registerPack, registeredPacks, type Pack, type Distribution } from "@johnhenry/graceholder";
+import { geo } from "@johnhenry/graceholder/packs/geo";
+import commerce from "@johnhenry/graceholder/packs/commerce";
+import { allPacks, finance, health } from "@johnhenry/graceholder/packs";
+
+const pack: Pack = geo;
+registerPack(commerce);
+const names: string[] = registeredPacks();
+const dist: Distribution = "zipf";
+const rich = graceholder("{ users { avatar city } }", { packs: [geo, "commerce", finance, health, ...allPacks], images: "svg", distributions: "realistic" });
+void [pack, names, dist, rich];

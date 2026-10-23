@@ -17,13 +17,17 @@ function pluralLast(word) {
 /**
  * L2-L6. L1 (directive/spec) arrives with M4.
  * @param {string} fieldName
- * @param {{ paging: boolean, idsArg: boolean, listLiteralArg: boolean }} ctx
+ * @param {{ paging: boolean, idsArg: boolean, listLiteralArg: boolean, realistic?: boolean, object?: boolean }} ctx
  * @returns {{ list: boolean, rule: string }}
  */
 export function listRule(fieldName, ctx) {
   const tokens = tokenize(fieldName);
   const last = tokens[tokens.length - 1] ?? "";
   if (ctx.paging) return { list: true, rule: "L2" };
+  // realistic mode: `salesHistory { date value }` is a time series, which is a list
+  if (ctx.realistic && ctx.object && SERIES_TYPE_WORDS.has(last)) return { list: true, rule: "L7" };
+  // realistic mode: a scalar `followers` or `sales` is a number, not a list of words
+  if (ctx.realistic && !ctx.object && Object.hasOwn(POPULARITY, last)) return { list: false, rule: "L6" };
   if (pluralLast(last)) return { list: true, rule: "L3" };
   if (L4_NAMES.has(fieldName.toLowerCase()) || L4_NAMES.has(last) || (tokens[0] === "all" && tokens.length > 1)) {
     return { list: true, rule: "L4" };
@@ -58,6 +62,27 @@ const FLOAT_RANGES = {
   longitude: ["float", -180, 180], percent: ["float", 0, 100],
 };
 
+/**
+ * Realistic mode only (options.distributions: "realistic"): popularity-like counts are heavy-tailed.
+ * word -> [distribution, min, max]
+ */
+const POPULARITY = {
+  views: ["lognormal", 0, 1000000], view: ["lognormal", 0, 1000000], impressions: ["lognormal", 0, 5000000],
+  plays: ["lognormal", 0, 1000000], reads: ["lognormal", 0, 500000], clicks: ["lognormal", 0, 100000],
+  likes: ["lognormal", 0, 50000], like: ["lognormal", 0, 50000], shares: ["lognormal", 0, 10000],
+  followers: ["powerlaw", 0, 1000000], follower: ["powerlaw", 0, 1000000], subscribers: ["powerlaw", 0, 1000000],
+  stars: ["powerlaw", 0, 100000], downloads: ["powerlaw", 0, 10000000], sales: ["zipf", 0, 100000],
+};
+const SERIES_TYPE_WORDS = new Set(["history", "series", "timeline", "trend"]);
+const SERIES_DATE_WORDS = new Set(["date", "day", "at", "time", "timestamp", "month", "week", "period", "ts", "x"]);
+const SERIES_VALUE_WORDS = new Set([
+  "value", "amount", "count", "total", "price", "y", "balance", "close", "volume", "sales", "revenue", "views",
+  "visits", "users", "score", "rate", "temperature", "level", "reading",
+]);
+
+/** Realistic mode: is this the element type of a time series (`SalesHistory`, `PriceSeries`)? */
+export const isSeriesType = (typeName) => SERIES_TYPE_WORDS.has(tokenize(typeName).at(-1) ?? "");
+
 const COHERENT_DATES = { created: "time.created", updated: "time.updated", published: "time.published" };
 const DATE_WORDS = new Set(["at", "date", "time", "timestamp"]);
 const BIRTH_WORDS = new Set(["birthday", "dob"]);
@@ -84,7 +109,7 @@ export function countOf(fieldName) {
 /**
  * Pick the SDL scalar type and generator for a scalar field. First matching row wins (T1-T13).
  * @param {string} fieldName
- * @param {{ typeName: string, list: boolean }} ctx
+ * @param {{ typeName: string, list: boolean, packs?: any[], realistic?: boolean }} ctx
  * @returns {{ sdl: string, gen: string, args: Record<string, any>, rule: string, nullable?: boolean }}
  */
 export function classifyScalar(fieldName, ctx) {
@@ -102,6 +127,16 @@ export function classifyScalar(fieldName, ctx) {
     if (tokens.length === 1 && !ctx.list) return r("ID", "id.key", "T1");
     return r("ID", "id.int", "T1", { min: 1, max: 100, string: true });
   }
+  // realistic mode: fields of a time-series element type (`salesHistory { date value }`)
+  if (ctx.realistic && isSeriesType(ctx.typeName)) {
+    if (tokens.length === 1 && SERIES_DATE_WORDS.has(last)) return r("DateTime", "series.date", "T14");
+    if (tokens.length === 1 && SERIES_VALUE_WORDS.has(last)) return r("Float", "series.value", "T14");
+  }
+  // packs, in order: the first pack that recognises the name wins (rule P1)
+  for (const pack of ctx.packs ?? []) {
+    const hit = pack.rules?.({ tokens, first, last, kind, typeName: ctx.typeName, list: ctx.list });
+    if (hit) return r(hit.sdl, hit.gen, "P1", hit.args ?? {}, hit.nullable ? { nullable: true } : {});
+  }
   // T3
   if (last === "email" || last === "mail" || (last === "address" && has("email"))) return r("String", "person.email", "T3");
   // T5 before T4: `avatarUrl` is an image, not a plain url
@@ -114,6 +149,12 @@ export function classifyScalar(fieldName, ctx) {
   if (PHONE_WORDS.has(last)) return r("String", "person.phone", "T6");
   // T7
   if (BOOL_PREFIX.has(first) || BOOL_SUFFIX.has(last)) return r("Boolean", "bool", "T7");
+  // T8, realistic mode: heavy-tailed popularity counts (`views`, `likeCount`, `followers`, `sales`)
+  if (ctx.realistic) {
+    const word = Object.hasOwn(POPULARITY, last) ? last : (last === "count" || last === "total") && tokens.length > 1 ? tokens[tokens.length - 2] : undefined;
+    const pop = word !== undefined && Object.hasOwn(POPULARITY, word) ? POPULARITY[word] : undefined;
+    if (pop) return r("Int", "int", "T8", { min: pop[1], max: pop[2], dist: pop[0] });
+  }
   // T8 (a type context overrides `total`, see T9)
   const numberOf = first === "number" && tokens[1] === "of";
   const orderTotal = last === "total" && kind === "order";

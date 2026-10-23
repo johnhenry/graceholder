@@ -7,7 +7,7 @@ import { compileSpec } from "./spec.js";
 import { keyStream } from "./key.js";
 import { tokenize, typeNameFor } from "./naming.js";
 import { ID_ARGS, entityKeyFromArgs } from "./args.js";
-import { anchorMs, checkLocale, generateResult, DEFAULT_ANCHOR, DEFAULT_SEED } from "./generate.js";
+import { anchorMs, checkLocale, generateResult, realismOptions, DEFAULT_ANCHOR, DEFAULT_SEED } from "./generate.js";
 
 const DEFAULT_VERBS = {
   create: "create", add: "create", insert: "create",
@@ -233,7 +233,14 @@ export function createWorld(options = {}) {
   const anchorIso = new Date(anchorMs(anchorDate)).toISOString();
   const spec = options.spec === undefined ? undefined : structuredClone(options.spec);
   const mutations = compileSpec(spec).mutations;
-  const base = { seed, spec, anchorDate: anchorIso, locale, strict: options.strict };
+  // realism options (docs/design.md section 16, Realism) apply to every query of the world; fail early on a bad one
+  realismOptions(options);
+  const realism = {
+    ...(options.packs ? { packs: options.packs } : {}),
+    ...(options.images !== undefined ? { images: options.images } : {}),
+    ...(options.distributions !== undefined ? { distributions: options.distributions } : {}),
+  };
+  const base = { seed, spec, anchorDate: anchorIso, locale, strict: options.strict, ...realism };
 
   const state = new WorldState();
   state.position = mutations.position;
@@ -418,7 +425,9 @@ export function createWorld(options = {}) {
 
     /** `{ seed, spec, anchorDate, locale, log }`: pass it to createWorld to replay to the same state. */
     export() {
-      return structuredClone({ seed, spec, anchorDate: anchorIso, locale, log });
+      // pack objects are exported by name: register them (registerPack) before replaying
+      const extra = { ...realism, ...(realism.packs ? { packs: realism.packs.map((p) => (typeof p === "string" ? p : p.name)) } : {}) };
+      return structuredClone({ seed, spec, anchorDate: anchorIso, locale, ...extra, log });
     },
 
     /** Forget every pin and mutation. */

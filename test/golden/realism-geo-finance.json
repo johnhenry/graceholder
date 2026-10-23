@@ -1,0 +1,56 @@
+{
+  "name": "realism-geo-finance: IBAN country and currency follow the place",
+  "header": {
+    "locale": "en",
+    "keyScheme": "gh1"
+  },
+  "input": {
+    "query": "{ users(first: 5) { country city iban currency currencySymbol } }",
+    "options": {
+      "seed": "realism",
+      "packs": [
+        "geo",
+        "finance"
+      ]
+    }
+  },
+  "output": {
+    "users": [
+      {
+        "country": "United States",
+        "city": "Portland",
+        "iban": "ES3629935969971896475293",
+        "currency": "USD",
+        "currencySymbol": "$"
+      },
+      {
+        "country": "Spain",
+        "city": "Zaragoza",
+        "iban": "ES0461360057518771318736",
+        "currency": "EUR",
+        "currencySymbol": "€"
+      },
+      {
+        "country": "New Zealand",
+        "city": "Wellington",
+        "iban": "PL69417326522612347040632264",
+        "currency": "NZD",
+        "currencySymbol": "$"
+      },
+      {
+        "country": "Mexico",
+        "city": "Mexico City",
+        "iban": "ES5539217564089432267952",
+        "currency": "MXN",
+        "currencySymbol": "$"
+      },
+      {
+        "country": "United States",
+        "city": "Denver",
+        "iban": "IT80Z0049234275M3C1KW9YHLSY",
+        "currency": "USD",
+        "currencySymbol": "$"
+      }
+    ]
+  }
+}
