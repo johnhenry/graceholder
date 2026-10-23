@@ -211,6 +211,37 @@ console.log({ spec, code: graceholder(query, { spec, seed: "demo" }).orders[0].c
 }
 ```
 
+## A world that remembers
+
+`createWorld` gives a fake backend: pin specific entities, run mutations (`createUser`, `updateUser`, `deleteUser`, `addX`, `removeX`, ...) and later queries see them. Created ids, positions and counts are deterministic, and the state is an append-only log you can export and replay.
+
+```js
+import { createWorld } from "@johnhenry/graceholder";
+
+const world = createWorld({ seed: "readme" });
+world.pin("User:1", { name: "Alice Admin" });
+world.query(`mutation { deleteUser(id: 2) { id } }`);
+const { data } = world.query("{ users { id name email } }");
+console.log(data.users.slice(0, 2));
+```
+
+```json
+[
+  {
+    "id": "1",
+    "name": "Alice Admin",
+    "email": "alice.admin@example.net"
+  },
+  {
+    "id": "3",
+    "name": "Ines Gupta",
+    "email": "ines.gupta@example.net"
+  }
+]
+```
+
+See [docs/api.md](docs/api.md#createworldoptions) for the mutation rules.
+
 ## Determinism and stability
 
 The key scheme, hash (XXH64), generator (SplitMix64), vocabulary and inference rules are frozen at 1.0.0; see [STABILITY.md](STABILITY.md). Golden files in `test/golden` pin the output, are checked on Node 22 and 24, and are reproduced in a browser-like VM and in headless Chromium.

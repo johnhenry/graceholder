@@ -77,8 +77,8 @@ function buildRegistry(V) {
   const sentence = (s) => cap(wordList(s, s.int(6, 14)).join(" ")) + ".";
   const sentences = (s, n) => Array.from({ length: n }, () => sentence(s)).join(" ");
 
-  const first = (ctx) => ctx.slot("first").pick(V.firstNames);
-  const last = (ctx) => ctx.slot("last").pick(V.lastNames);
+  const first = (ctx) => ctx.pinned?.first ?? ctx.slot("first").pick(V.firstNames);
+  const last = (ctx) => ctx.pinned?.last ?? ctx.slot("last").pick(V.lastNames);
   const place = (ctx) => ctx.slot("place").pick(V.places);
   const street = (ctx) => {
     const s = ctx.slot("street");

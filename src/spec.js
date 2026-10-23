@@ -82,17 +82,64 @@ function fieldProps(key, f) {
   return props;
 }
 
+export const MUTATION_OPS = ["create", "update", "delete"];
+
+/** Validate the `$mutations` block (docs/design.md section 16, World) and return its canonical form. */
+function compileMutations(value) {
+  const fail = (m) => bad(`$mutations: ${m}`, "$mutations");
+  if (value === null || typeof value !== "object" || Array.isArray(value)) throw fail("must be an object");
+  const out = { verbs: {}, fields: {}, relations: {}, position: undefined };
+  for (const [k, v] of Object.entries(value)) {
+    if (k === "verbs") {
+      if (v === null || typeof v !== "object" || Array.isArray(v)) throw fail("verbs must be an object of verb -> create | update | delete");
+      for (const [verb, op] of Object.entries(v)) {
+        if (!/^[a-z][A-Za-z0-9]*$/.test(verb) || /[A-Z]/.test(verb)) throw fail(`verb ${JSON.stringify(verb)} must be one lowercase word`);
+        if (!MUTATION_OPS.includes(op)) throw fail(`verbs.${verb} must be one of ${MUTATION_OPS.join(", ")}`);
+        out.verbs[verb] = op;
+      }
+    } else if (k === "position") {
+      if (v !== "start" && v !== "end") throw fail('position must be "start" or "end"');
+      out.position = v;
+    } else if (k === "relations") {
+      if (v === null || typeof v !== "object" || Array.isArray(v)) throw fail("relations must be an object of Type.inputField -> OwnerType");
+      for (const [rel, owner] of Object.entries(v)) {
+        if (!/^[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*$/.test(rel) || typeof owner !== "string" || !SEGMENT.test(owner)) throw fail(`relations.${rel} must map Type.inputField to an owner type name`);
+        out.relations[rel] = owner;
+      }
+    } else if (k === "fields") {
+      if (v === null || typeof v !== "object" || Array.isArray(v)) throw fail("fields must be an object keyed by mutation field name");
+      for (const [name, cfg] of Object.entries(v)) {
+        if (!SEGMENT.test(name)) throw fail(`fields.${name}: not a field name`);
+        if (cfg === null || typeof cfg !== "object" || Array.isArray(cfg)) throw fail(`fields.${name} must be an object`);
+        for (const key of Object.keys(cfg)) if (!["op", "type", "idArg", "input", "read"].includes(key)) throw fail(`fields.${name}: unknown property ${JSON.stringify(key)}`);
+        if (!MUTATION_OPS.includes(cfg.op)) throw fail(`fields.${name}.op must be one of ${MUTATION_OPS.join(", ")}`);
+        for (const key of ["type", "idArg", "read"]) if (cfg[key] !== undefined && (typeof cfg[key] !== "string" || !SEGMENT.test(cfg[key]))) throw fail(`fields.${name}.${key} must be a name`);
+        if (cfg.input !== undefined && (typeof cfg.input !== "string" || !SEGMENT.test(cfg.input))) throw fail(`fields.${name}.input must be "args" or an argument name`);
+        out.fields[name] = { ...cfg };
+      }
+    } else {
+      throw fail(`unknown property ${JSON.stringify(k)} (known: verbs, fields, relations, position)`);
+    }
+  }
+  return out;
+}
+
 /**
  * Validate and compile a side-car spec.
  * @param {unknown} spec
- * @returns {{ entries: any[], options: { poolSize?: number, endlessTotal?: number } }}
+ * @returns {{ entries: any[], options: { poolSize?: number, endlessTotal?: number }, mutations: any }}
  */
 export function compileSpec(spec) {
-  if (spec === undefined || spec === null) return { entries: [], options: {} };
+  if (spec === undefined || spec === null) return { entries: [], options: {}, mutations: compileMutations({}) };
   if (typeof spec !== "object" || Array.isArray(spec)) throw bad("spec must be an object keyed by path pattern");
   const options = {};
   const entries = [];
+  let mutations = compileMutations({});
   for (const [key, value] of Object.entries(spec)) {
+    if (key === "$mutations") {
+      mutations = compileMutations(value);
+      continue;
+    }
     if (key === "$options") {
       if (value === null || typeof value !== "object") throw bad("$options must be an object");
       for (const [k, v] of Object.entries(value)) {
@@ -122,7 +169,7 @@ export function compileSpec(spec) {
     entry.used = false;
     entries.push(entry);
   }
-  return { entries, options };
+  return { entries, options, mutations };
 }
 
 function matchSegments(pattern, path, pi = 0, si = 0) {

@@ -133,6 +133,8 @@ class Inferer {
   constructor(op, fragments, config) {
     this.spec = config.spec;
     this.variables = config.variables;
+    this.nullableTypes = config.nullableTypes;
+    this.nullableFields = config.nullableFields;
     this.fragments = fragments;
     this.varTypes = new Map((op.variableDefinitions ?? []).map((v) => [v.variable.name.value, print(v.type)]));
     this.types = new Map(); // typeName -> Map(fieldName -> info)
@@ -543,7 +545,8 @@ class Inferer {
         const argText = args.length ? `(${args.join(", ")})` : "";
         const base = info.kind === "object" ? info.typeName : info.sdl;
         let type = info.list ? `[${base}!]!` : `${base}!`;
-        if (info.nullable) type = type.replace(/!$/, "");
+        // a world with deletions: a singular reference to a deleted entity resolves to null
+        if (info.nullable || this.nullableFields?.has(`${typeName}.${info.name}`) || (this.nullableTypes && info.kind === "object" && !info.list && !info.connection && !info.abstract && this.nullableTypes.has(info.typeName))) type = type.replace(/!$/, "");
         lines.push(`  ${info.name}${argText}: ${type}`);
       }
       if (lines.length === 0) lines.push("  _empty: String");
@@ -590,7 +593,7 @@ function argType(usages) {
 
 /**
  * @param {string|import("graphql").DocumentNode} query
- * @param {{ operationName?: string, spec?: any, compiledSpec?: any, variables?: Record<string, unknown>, strict?: boolean }} [options]
+ * @param {{ operationName?: string, spec?: any, compiledSpec?: any, variables?: Record<string, unknown>, strict?: boolean, nullableTypes?: Set<string>, nullableFields?: Set<string> }} [options]
  */
 export function infer(query, options = {}) {
   const doc = toDocument(query);
@@ -599,7 +602,7 @@ export function infer(query, options = {}) {
   checkDirectives([op, ...fragments.values()]);
   const spec = options.compiledSpec ?? compileSpec(options.spec);
   const variables = operationVariables(op, options.variables);
-  const inf = new Inferer(op, fragments, { spec, variables });
+  const inf = new Inferer(op, fragments, { spec, variables, nullableTypes: options.nullableTypes, nullableFields: options.nullableFields });
   const decisions = inf.finalize();
   if (options.strict) {
     const unused = decisions.find((d) => d.kind === "unused");
