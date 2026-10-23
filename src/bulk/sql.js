@@ -212,7 +212,7 @@ export function sqlWriter(source, options = {}) {
   }
 
   // ---- rows
-  const seenKeys = new Set();
+  const seen = new Map();
   let pos = plan.offset;
   const end = plan.count === undefined ? Infinity : plan.offset + plan.count;
   let finished = false;
@@ -225,42 +225,80 @@ export function sqlWriter(source, options = {}) {
     return quoteText(key);
   };
 
-  function walk(node, obj, path, trace, shared, links, out, emit) {
+  /**
+   * Write the rows of one entity and everything below it.
+   *
+   * An entity of a shared type can be met in several places with different selections (as a root
+   * item, as `post.author`, ...), and what hangs below it can differ per place. Its row is written
+   * once, the first time. Each later meeting completes what the earlier ones left out: singular
+   * references the row was written without (an UPDATE of the foreign key), and, because every owned
+   * descendant is tracked too, child rows and their own references that are not written yet.
+   *
+   * `seen` has one entry per tracked entity: shared entities with a pool key (at most `poolSize` per
+   * type) and everything they own, which is a function of those keys and not of the stream length, so
+   * memory stays bounded. Owned entities of untracked entities (rows of a long root collection) are
+   * unique by their path and are not remembered.
+   *
+   * @param {boolean} shared the place is a shared-pool reference (or a root item)
+   * @param {boolean} tracked the entity is owned by a tracked entity
+   */
+  function walk(node, obj, path, trace, shared, tracked, links, out, emit) {
     const ref = trace.get(path);
     if (!ref) throw new GraceholderError("internal", `no entity recorded at ${path}`);
     const t = tables.get(ref.typeName);
     const key = String(ref.entityKey);
-    if (t.dedupe && shared) {
+    /** @type {Set<string>|null} singular fields already written for this entity (null: not tracked) */
+    let done = null;
+    let known = false;
+    let stored = false;
+    if (tracked || (t.dedupe && shared)) {
       const id = `${t.type}\u0000${key}`;
-      if (seenKeys.has(id)) return key;
-      if (!NUMERIC.test(key) || Number(key) <= poolSize) seenKeys.add(id);
+      done = seen.get(id) ?? null;
+      known = done !== null;
+      if (!known) {
+        done = new Set();
+        if (tracked || !NUMERIC.test(key) || Number(key) <= poolSize) seen.set(id, done);
+      }
+      stored = seen.has(id);
     }
-    const values = [];
-    for (const c of t.cols) {
-      if (c.pk) values.push(keyLiteral(t, key));
-      else if (c.scalar) values.push(literal(dialect, c.kind, obj[c.scalar.key]));
-      else if (c.single) {
-        const child = obj[c.single.key];
-        if (child === null || child === undefined) {
-          values.push("NULL");
-        } else {
-          const entry = node.fields.get(c.single.key);
-          const childKey = walk(entry.node, child, `${path}/${c.single.key}`, trace, !c.single.owned, null, out, emit);
-          values.push(keyLiteral(c.fk, childKey));
+    const walkSingle = (single, child) =>
+      walk(node.fields.get(single.key).node, child, `${path}/${single.key}`, trace, !single.owned, stored && single.owned, null, out, emit);
+
+    if (!known) {
+      const values = [];
+      for (const c of t.cols) {
+        if (c.pk) values.push(keyLiteral(t, key));
+        else if (c.scalar) values.push(literal(dialect, c.kind, obj[c.scalar.key]));
+        else if (c.single) {
+          const child = obj[c.single.key];
+          if (child !== undefined) done?.add(c.single.name);
+          if (child === null || child === undefined) values.push("NULL");
+          else values.push(keyLiteral(c.fk, walkSingle(c.single, child)));
+        } else if (c.owner) {
+          const link = links?.get(`${c.owner.type}\u0000${c.owner.list}`);
+          values.push(link === undefined ? "NULL" : keyLiteral(c.fk, link));
         }
-      } else if (c.owner) {
-        const link = links?.get(`${c.owner.type}\u0000${c.owner.list}`);
-        values.push(link === undefined ? "NULL" : keyLiteral(c.fk, link));
+      }
+      if (emit) out.push(`${insertPrefix.get(t.type)}${values.join(", ")});\n`);
+    } else {
+      for (const c of t.cols) {
+        if (!c.single) continue;
+        const child = obj[c.single.key];
+        if (child === undefined || child === null) continue;
+        const childKey = walkSingle(c.single, child); // writes what the child still lacks
+        if (done && !done.has(c.single.name)) {
+          done.add(c.single.name);
+          if (emit) out.push(`UPDATE ${q(t.table)} SET ${q(c.name)} = ${keyLiteral(c.fk, childKey)} WHERE ${q(t.pk)} = ${keyLiteral(t, key)};\n`);
+        }
       }
     }
-    if (emit) out.push(`${insertPrefix.get(t.type)}${values.join(", ")});\n`);
     for (const l of t.lists.values()) {
       const arr = obj[l.key];
       if (!Array.isArray(arr)) continue;
       const entry = node.fields.get(l.key);
       const link = new Map([[`${t.type}\u0000${l.name}`, key]]);
       arr.forEach((el, i) => {
-        if (el !== null && el !== undefined) walk(entry.node, el, `${path}/${l.key}/${i}`, trace, l.shared, link, out, emit);
+        if (el !== null && el !== undefined) walk(entry.node, el, `${path}/${l.key}/${i}`, trace, l.shared, stored && !l.shared, link, out, emit);
       });
     }
     return key;
@@ -283,7 +321,7 @@ export function sqlWriter(source, options = {}) {
       });
       const out = [];
       items.forEach((item, i) => {
-        walk(shape, item, `${plan.key}/${i}`, trace, true, null, out, emit);
+        walk(shape, item, `${plan.key}/${i}`, trace, true, false, null, out, emit);
       });
       pos += items.length;
       if (items.length < size) finished = true;
