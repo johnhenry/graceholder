@@ -96,6 +96,7 @@ export type ErrorCode =
   | "bad-derive"
   | "conflicting-overrides"
   | "unused-spec-path"
+  | "bad-suggestion"
   | "unsupported"
   | "graphql"
   | "internal";
@@ -108,3 +109,19 @@ export declare class GraceholderError extends Error {
   errors?: readonly GraphQLError[];
   constructor(code: ErrorCode, message: string, extra?: { path?: string; hint?: string; cause?: unknown });
 }
+
+/** Version tag at the top of the suggestSpec prompt. */
+export declare const SUGGEST_PROMPT_VERSION: string;
+
+/** The prompt `suggestSpec` sends (query, inferred SDL and decisions, spec grammar, generator names). */
+export declare function buildSuggestPrompt(query: string, spec?: Spec): string;
+
+/**
+ * Authoring-time helper: ask an injected model for a spec, validate it against the query, and offer
+ * one repair round. The core never calls it and imports no LLM SDK.
+ * @throws {GraceholderError} `bad-suggestion` when the reply is still invalid after the repair round
+ */
+export declare function suggestSpec(
+  query: string,
+  opts: { llm: (prompt: string) => Promise<string>; spec?: Spec },
+): Promise<Spec>;

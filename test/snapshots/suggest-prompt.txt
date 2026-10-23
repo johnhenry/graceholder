@@ -1,0 +1,66 @@
+graceholder suggest-spec/1
+
+graceholder generates repeatable mock data for a GraphQL query, inferring a schema from field names with heuristics.
+Review the inferred schema below and return a spec that corrects only the places where the heuristics are probably wrong
+(wrong list/object shape, wrong type, a better generator, realistic counts or value sets).
+
+## Query
+{ orders { code status total items { name } } }
+
+## Inferred schema
+type Query {
+  orders: [Order!]!
+}
+
+type Order {
+  code: String!
+  status: String!
+  total: Float!
+  items: [Item!]!
+}
+
+type Item {
+  name: String!
+}
+
+## Inferred decisions (path | kind | value | source | rule)
+orders | list | true | heuristic | L3
+orders | type | "Order" | heuristic | N3
+orders.code | list | false | default | L6
+orders.code | scalar | "String" | default | T13
+orders.status | list | false | default | L6
+orders.status | scalar | "String" | heuristic | T11
+orders.total | list | false | default | L6
+orders.total | scalar | "Float" | heuristic | T9
+orders.items | list | true | heuristic | L3
+orders.items | type | "Item" | heuristic | N3
+orders.items.name | list | false | default | L6
+orders.items.name | scalar | "String" | heuristic | T11
+
+## Spec grammar
+A spec is a JSON object. Each key is a path pattern, each value a field spec.
+Path patterns use schema field names (never aliases), dot separated from the root field:
+  users.name      exactly that path
+  *.status        "*" is exactly one segment
+  **.createdAt    "**" is zero or more segments (patterns are anchored at the root unless they start with "**")
+  @Type.field     the field on that type wherever it appears (for example @User.email)
+Precedence per property: exact path (or @Type.field) over "*" over "**"; heuristics apply to anything you leave out.
+Field spec properties (all optional):
+  list / one      boolean, force a list or a single object
+  count           n, [min, max] or {"min": 1, "max": 5}, the size of a list (and its declared total)
+  gen             "name" or {"name": "int", "args": {"min": 1, "max": 9}}, a generator for a scalar
+  pattern         string; # digit, ? lowercase letter, A uppercase letter, * letter or digit, \ escapes
+  pick            array of values or {"value": v, "weight": n} objects, chosen from deterministically
+  nullRate        number from 0 to 1
+  derive          {"from": "otherFieldOnTheSameType"}
+  type            a type name; types with the same name share one pool of entities
+  seed            string or number, a different seed for this subtree
+  key             identifying argument name(s), for example ["orgId", "userId"]
+  own / shared    boolean; own = not drawn from the shared pool of its type
+Top-level "$options" may set {"poolSize": n, "endlessTotal": n}.
+
+## Known generators
+id.key, id.uuid, id.int, int, float, money, percent, bool, word, words, sentence, sentences, paragraph, title, slug, lorem, person.first, person.last, person.full, person.username, person.email, person.phone, person.jobTitle, person.bio, person.age, company.name, company.domain, company.industry, product.name, place.city, place.state, place.country, place.zip, place.street, place.address, place.lat, place.lng, url, imageUrl, ip, hex, color, datetime, time.created, time.updated, time.published, time.deleted, time.birthday, oneOf, pattern, count.of, order.subtotal, order.tax, order.total
+
+## Reply
+Return ONLY a JSON object that is a valid spec (no commentary). Use only the generators listed above and only paths that exist in the query.
