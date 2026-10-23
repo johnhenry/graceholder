@@ -7,7 +7,7 @@ import { xxh64 } from "./xxh64.js";
 import { generate, asciiFold } from "./generators.js";
 import { encodeCursor, decodeCursor } from "./cursor.js";
 import { argsKeyOf, entityKeyFromArgs } from "./args.js";
-import { classifyScalar } from "./rules.js";
+import { classifyScalar, isSeriesType } from "./rules.js";
 import { tokenize, typeNameFor } from "./naming.js";
 
 export const POOL_SIZE = 100;
@@ -108,13 +108,17 @@ const slugify = (v) => String(v).toLowerCase().replace(/[^a-z0-9]+/g, "-").repla
 
 /**
  * @param {{ sdl: string, document: any, model: Map<string, Map<string, any>>, abstracts: Map<string, any>, opSeed?: string }} inferred
- * @param {{ seed: string|number, anchorMs: number, locale?: string, variables?: Record<string, unknown>, poolSize?: number, endlessTotal?: number, world?: any }} opts
+ * @param {{ seed: string|number, anchorMs: number, locale?: string, variables?: Record<string, unknown>, poolSize?: number, endlessTotal?: number, world?: any, images?: "url"|"svg", packs?: any[], realistic?: boolean }} opts
  * @returns {import("graphql").ExecutionResult}
  */
 export function run(inferred, opts) {
   const schema = buildSchema(inferred.sdl);
   const invalid = validate(schema, inferred.document);
   if (invalid.length) return { errors: invalid };
+  const packs = opts.packs ?? [];
+  const realistic = Boolean(opts.realistic);
+  /** geo-style types (`address`, `location`) share their parent's persona so the parent's and the address's city agree */
+  const inherits = (typeName) => packs.some((p) => p.inherit?.(typeName));
   const poolSize = opts.poolSize ?? POOL_SIZE;
   const endlessTotal = opts.endlessTotal ?? ENDLESS_TOTAL;
   const rootSeed = inferred.opSeed ?? opts.seed;
@@ -130,20 +134,22 @@ export function run(inferred, opts) {
     const declared = fieldOf(parent, fieldName)?.count;
     const stream = keyStream(K(seed, "l", parent, entityKey, fieldName, sub(argsKey)));
     if (declared?.n !== undefined) return declared.n;
-    return declared ? stream.int(declared.min, declared.max) : stream.int(3, 10);
+    if (declared) return stream.int(declared.min, declared.max);
+    // a time series reads better with some history
+    return realistic && fieldOf(parent, fieldName)?.kind === "object" && isSeriesType(fieldOf(parent, fieldName).typeName) ? stream.int(14, 60) : stream.int(3, 10);
   };
 
   /** Generate one scalar; `personaKey` is the entity whose persona slots the generator reads. */
-  const scalar = (seed, f, parent, entityKey, fieldName, subKeys, personaKey = entityKey) => {
+  const scalar = (seed, f, parent, entityKey, fieldName, subKeys, personaKey = entityKey, extra = {}) => {
     if (fieldName === "qty") fieldName = "quantity"; // one latent quantity per item, whichever name is selected
     if (ws) {
       const o = worldValue(parent, entityKey, fieldName);
       if (o.has) return o.value;
     }
-    if (f.derive !== undefined) return derived(seed, f, parent, entityKey, fieldName, subKeys, personaKey);
+    if (f.derive !== undefined) return derived(seed, f, parent, entityKey, fieldName, subKeys, personaKey, extra);
     if (f.gen === "count.of") return siblingView(seed, parent, entityKey, f.genArgs.of, fieldOf(parent, f.genArgs.of)).size;
     if (f.gen.startsWith("order.")) return orderMoney(seed, f.gen, parent, entityKey);
-    return generate(f.gen, genCtx(seed, f, parent, entityKey, fieldName, subKeys, personaKey));
+    return generate(f.gen, genCtx(seed, f, parent, entityKey, fieldName, subKeys, personaKey, extra));
   };
 
   /** A pinned or mutated value of one field of one entity (docs/design.md section 16, World). */
@@ -186,10 +192,13 @@ export function run(inferred, opts) {
     return out;
   };
 
-  const genCtx = (seed, f, parent, entityKey, fieldName, subKeys, personaKey) => ({
-    pinned: ws ? personaPins(parent, personaKey) : undefined,
+  const genCtx = (seed, f, parent, entityKey, fieldName, subKeys, personaKey, extra = {}) => ({
+    pinned: ws ? personaPins(extra.personaType ?? parent, personaKey) : undefined,
     stream: keyStream(K(seed, "e", parent, entityKey, fieldName, subKeys)),
-    slot: (name) => keyStream(K(seed, "p", parent, personaKey, name)),
+    slot: (name) => keyStream(K(seed, "p", extra.personaType ?? parent, personaKey, name)),
+    series: extra.series && { i: extra.series.i, n: extra.series.n, slot: (name) => keyStream(K(seed, "p", parent, extra.series.key, name)) },
+    images: opts.images,
+    packs,
     anchorMs: opts.anchorMs,
     args: f.genArgs,
     typeName: parent,
@@ -201,19 +210,19 @@ export function run(inferred, opts) {
   const fieldOrDefault = (type, name, alt) => {
     const fields = inferred.model.get(type);
     for (const n of [name, alt]) if (n && fields?.has(n)) return fields.get(n);
-    const c = classifyScalar(name, { typeName: type, list: false });
+    const c = classifyScalar(name, { typeName: type, list: false, packs, realistic });
     return { kind: "scalar", list: false, gen: c.gen, genArgs: c.args };
   };
 
   /** @derive: the source field's value of the same entity, shaped by this field's own generator kind. */
-  const derived = (seed, f, parent, entityKey, fieldName, subKeys, personaKey) => {
+  const derived = (seed, f, parent, entityKey, fieldName, subKeys, personaKey, extra) => {
     const srcInfo = fieldOrDefault(parent, f.derive);
-    const value = scalar(seed, srcInfo, parent, entityKey, f.derive, undefined, personaKey);
+    const value = scalar(seed, srcInfo, parent, entityKey, f.derive, undefined, personaKey, extra);
     if (value === null || value === undefined) return value;
     if (f.gen === "slug") return slugify(value);
     if (f.gen === "person.username") return asciiFold(String(value));
     if (f.gen === "person.email") {
-      const domain = String(generate("person.email", genCtx(seed, f, parent, entityKey, fieldName, subKeys, personaKey))).split("@")[1];
+      const domain = String(generate("person.email", genCtx(seed, f, parent, entityKey, fieldName, subKeys, personaKey, extra))).split("@")[1];
       return `${asciiFold(String(value))}@${domain}`;
     }
     return value;
@@ -331,7 +340,10 @@ export function run(inferred, opts) {
     if (!f) return undefined;
     const entityKey = source.entityKey;
     const seed = f.seed ?? source.seed ?? rootSeed;
-    const ref = (typeName, key) => ({ typeName, entityKey: key, seed });
+    const ref = (typeName, key, extra) => ({ typeName, entityKey: key, seed, ...extra });
+    // a geo-style child shares the persona of the entity that owns it (see `inherits`)
+    const personaOf = source.persona ?? { type: parent, key: entityKey };
+    const personaFor = (typeName) => (inherits(typeName) ? { persona: personaOf } : undefined);
 
     switch (f.special) {
       case "edges": {
@@ -365,7 +377,8 @@ export function run(inferred, opts) {
 
     const argsKey = argsKeyOf(args);
     if (f.kind === "scalar") {
-      if (!f.list) return scalar(seed, f, parent, entityKey, fieldName, sub(argsKey));
+      const own = source.persona ? { personaType: source.persona.type } : {};
+      if (!f.list) return scalar(seed, f, parent, entityKey, fieldName, sub(argsKey), source.persona?.key ?? entityKey, { ...own, series: source.series && { ...source.series } });
       const n = count(seed, parent, entityKey, fieldName, argsKey);
       return Array.from({ length: n }, (_, i) => scalar(seed, f, parent, entityKey, fieldName, argsKey ? [argsKey, i] : [i], `${entityKey}.${fieldName}.${i + 1}`));
     }
@@ -375,16 +388,25 @@ export function run(inferred, opts) {
     }
     if (f.list) {
       const c = collection(seed, f, parent, entityKey, fieldName, args);
+      if (realistic && isSeriesType(f.typeName)) {
+        // one series per owning entity, field and filter; each point knows its position and the series length
+        const n = count(seed, parent, entityKey, fieldName, argsKey);
+        const key = `${entityKey}.${fieldName}${argsKey ? `.${argsKey}` : ""}`;
+        return Array.from({ length: c.count }, (_, k) => ref(f.typeName, c.memberKey(c.start + k), { series: { i: c.start + k, n, key } }));
+      }
       return Array.from({ length: c.count }, (_, k) => ref(f.typeName, c.memberKey(c.start + k)));
     }
     // singular: identifying arguments select the entity; top-level fields are entity 1;
     // otherwise a stable reference into the pool of the type (E2), or an owned entity
     const selected = entityKeyFromArgs(args, f.keyArgs);
+    const child = personaFor(f.typeName);
     const k =
       selected ??
-      (f.own ? `${entityKey}.${fieldName}` : parent === ROOT ? "1" : String(keyStream(K(seed, "l", parent, entityKey, fieldName, sub(argsKey))).int(1, poolSize)));
+      (f.own || (child && parent !== ROOT)
+        ? `${entityKey}.${fieldName}`
+        : parent === ROOT ? "1" : String(keyStream(K(seed, "l", parent, entityKey, fieldName, sub(argsKey))).int(1, poolSize)));
     if (ws && !f.abstract && ws.isDeleted(f.typeName, k)) return null;
-    return ref(f.typeName, k);
+    return ref(f.typeName, k, selected === undefined && parent !== ROOT ? child : undefined);
   };
 
   const typeResolver = (value, _ctx, _info, abstractType) => {

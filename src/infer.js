@@ -102,7 +102,10 @@ function plainFields(selSet, fragments, out = []) {
 const OV_SOURCE_RANK = { directive: 2, spec: 1 };
 
 /** SDL scalar type of a generator's output. */
-export function genSdlType(name, args) {
+export function genSdlType(name, args, packs = []) {
+  for (const pack of packs) if (pack.types && Object.hasOwn(pack.types, name)) return pack.types[name];
+  if (name === "series.value") return "Float";
+  if (name === "series.date") return "DateTime";
   if (["int", "person.age", "count.of"].includes(name) || (name === "id.int" && !args.string)) return "Int";
   if (["float", "money", "percent", "place.lat", "place.lng", "order.subtotal", "order.tax", "order.total"].includes(name)) return "Float";
   if (name === "bool") return "Boolean";
@@ -118,11 +121,11 @@ export function genSdlType(name, args) {
 }
 
 /** Run a generator once with throwaway streams so unknown names and bad arguments fail at inference time. */
-function checkGenerator(name, args, path) {
+function checkGenerator(name, args, path, packs) {
   if (GRAPH_GENERATORS.includes(name)) return;
   const stream = new Stream(1n);
   try {
-    generate(name, { stream, slot: () => new Stream(1n), anchorMs: 0, args, typeName: "T", entityKey: "1", fieldName: "f" });
+    generate(name, { stream, slot: () => new Stream(1n), anchorMs: 0, args, typeName: "T", entityKey: "1", fieldName: "f", packs });
   } catch (e) {
     if (e instanceof GraceholderError && path) e.path = path;
     throw e;
@@ -132,6 +135,8 @@ function checkGenerator(name, args, path) {
 class Inferer {
   constructor(op, fragments, config) {
     this.spec = config.spec;
+    this.packs = config.packs ?? [];
+    this.realistic = Boolean(config.realistic);
     this.variables = config.variables;
     this.nullableTypes = config.nullableTypes;
     this.nullableFields = config.nullableFields;
@@ -387,13 +392,15 @@ class Inferer {
           info.list = false;
           decisions.push({ path: info.path, field: info.name, kind: "type", value: info.typeName, source: "heuristic", rule: "S3" });
         } else if (info.abstract) {
-          info.list = info.ov.list ?? listRule(info.name, { paging: argNames.some((n) => PAGING_ARGS.has(n)), idsArg: argNames.includes("ids"), listLiteralArg: false }).list;
+          info.list = info.ov.list ?? listRule(info.name, { paging: argNames.some((n) => PAGING_ARGS.has(n)), idsArg: argNames.includes("ids"), listLiteralArg: false, realistic: this.realistic, object: true }).list;
           decisions.push({ path: info.path, field: info.name, kind: "type", value: info.typeName, source: "heuristic", rule: "S4" });
         } else {
           const rule = listRule(info.name, {
             paging: argNames.some((n) => PAGING_ARGS.has(n)),
             idsArg: argNames.includes("ids"),
             listLiteralArg: [...info.args.values()].some((u) => u.some((x) => x.isList || x.type.startsWith("["))),
+            realistic: this.realistic,
+            object: info.kind === "object",
           });
           let list = info.kind === "scalar" && countOf(info.name) ? false : rule.list; // a count is a number
           let listRuleId = rule.rule;
@@ -413,7 +420,7 @@ class Inferer {
           }
         }
         if (info.kind === "scalar") {
-          const c = classifyScalar(info.name, { typeName, list: info.list });
+          const c = classifyScalar(info.name, { typeName, list: info.list, packs: this.packs, realistic: this.realistic });
           info.sdl = c.sdl;
           info.gen = c.gen;
           info.genArgs = c.args;
@@ -446,10 +453,10 @@ class Inferer {
         const push = (kind, value, rule, prop) => decisions.push({ path: info.path, field: info.name, kind, value, source: src[prop], rule });
         if (ov.gen !== undefined) {
           if (info.kind !== "scalar") throw conflict(info, "@gen/@pattern/@pick apply to scalar fields only");
-          checkGenerator(ov.gen.name, ov.gen.args, info.path);
+          checkGenerator(ov.gen.name, ov.gen.args, info.path, this.packs);
           info.gen = ov.gen.name;
           info.genArgs = ov.gen.args;
-          info.sdl = genSdlType(ov.gen.name, ov.gen.args);
+          info.sdl = genSdlType(ov.gen.name, ov.gen.args, this.packs);
           info.nullable = ov.gen.name === "time.deleted" && (ov.gen.args.nullRate ?? 1) >= 1 ? true : undefined;
           if (info.sdl === "DateTime") this.usesDateTime = true;
           Object.assign(info.decision, { value: info.sdl, source: src.gen, rule: "gen" });
@@ -493,7 +500,7 @@ class Inferer {
           cur = next;
         }
         const src = fields.get(info.derive);
-        info.sdl = src ? src.sdl : classifyScalar(info.derive, { typeName, list: false }).sdl;
+        info.sdl = src ? src.sdl : classifyScalar(info.derive, { typeName, list: false, packs: this.packs, realistic: this.realistic }).sdl;
         if (info.sdl === "DateTime") this.usesDateTime = true;
         info.list = false;
         info.nullable = info.nullRate > 0 ? true : undefined;
@@ -593,7 +600,7 @@ function argType(usages) {
 
 /**
  * @param {string|import("graphql").DocumentNode} query
- * @param {{ operationName?: string, spec?: any, compiledSpec?: any, variables?: Record<string, unknown>, strict?: boolean, nullableTypes?: Set<string>, nullableFields?: Set<string> }} [options]
+ * @param {{ operationName?: string, spec?: any, compiledSpec?: any, variables?: Record<string, unknown>, strict?: boolean, nullableTypes?: Set<string>, nullableFields?: Set<string>, packs?: any[], realistic?: boolean }} [options]
  */
 export function infer(query, options = {}) {
   const doc = toDocument(query);
@@ -602,7 +609,7 @@ export function infer(query, options = {}) {
   checkDirectives([op, ...fragments.values()]);
   const spec = options.compiledSpec ?? compileSpec(options.spec);
   const variables = operationVariables(op, options.variables);
-  const inf = new Inferer(op, fragments, { spec, variables, nullableTypes: options.nullableTypes, nullableFields: options.nullableFields });
+  const inf = new Inferer(op, fragments, { spec, variables, nullableTypes: options.nullableTypes, nullableFields: options.nullableFields, packs: options.packs, realistic: options.realistic });
   const decisions = inf.finalize();
   if (options.strict) {
     const unused = decisions.find((d) => d.kind === "unused");

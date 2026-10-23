@@ -48,7 +48,8 @@ Precedence per property: exact path (or @Type.field) over "*" over "**"; heurist
 Field spec properties (all optional):
   list / one      boolean, force a list or a single object
   count           n, [min, max] or {"min": 1, "max": 5}, the size of a list (and its declared total)
-  gen             "name" or {"name": "int", "args": {"min": 1, "max": 9}}, a generator for a scalar
+  gen             "name" or {"name": "int", "args": {"min": 1, "max": 9}}, a generator for a scalar;
+                  int, float and money also take "dist": "uniform" | "normal" | "lognormal" | "zipf" | "powerlaw"
   pattern         string; # digit, ? lowercase letter, A uppercase letter, * letter or digit, \ escapes
   pick            array of values or {"value": v, "weight": n} objects, chosen from deterministically
   nullRate        number from 0 to 1
@@ -60,7 +61,7 @@ Field spec properties (all optional):
 Top-level "$options" may set {"poolSize": n, "endlessTotal": n}.
 
 ## Known generators
-id.key, id.uuid, id.int, int, float, money, percent, bool, word, words, sentence, sentences, paragraph, title, slug, lorem, person.first, person.last, person.full, person.username, person.email, person.phone, person.jobTitle, person.bio, person.age, company.name, company.domain, company.industry, product.name, place.city, place.state, place.country, place.zip, place.street, place.address, place.lat, place.lng, url, imageUrl, ip, hex, color, datetime, time.created, time.updated, time.published, time.deleted, time.birthday, oneOf, pattern, count.of, order.subtotal, order.tax, order.total
+id.key, id.uuid, id.int, int, float, money, percent, bool, word, words, sentence, sentences, paragraph, title, slug, lorem, person.first, person.last, person.full, person.username, person.email, person.phone, person.jobTitle, person.bio, person.age, company.name, company.domain, company.industry, product.name, place.city, place.state, place.country, place.zip, place.street, place.address, place.lat, place.lng, url, imageUrl, image.avatar, image.geometric, ip, hex, color, datetime, time.created, time.updated, time.published, time.deleted, time.birthday, series.date, series.value, oneOf, pattern, count.of, order.subtotal, order.tax, order.total
 
 ## Reply
 Return ONLY a JSON object that is a valid spec (no commentary). Use only the generators listed above and only paths that exist in the query.

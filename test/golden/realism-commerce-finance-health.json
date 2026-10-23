@@ -1,0 +1,95 @@
+{
+  "name": "realism-commerce-finance-health: product, account and fictional health packs",
+  "header": {
+    "locale": "en",
+    "keyScheme": "gh1"
+  },
+  "input": {
+    "query": "{ products(first: 3) { name category brand sku price } accounts(first: 3) { iban bic cardNumber routingNumber currency accountType merchant } patients(first: 3) { condition medication dosage specialty mrn } }",
+    "options": {
+      "seed": "realism",
+      "packs": [
+        "commerce",
+        "finance",
+        "health"
+      ]
+    }
+  },
+  "output": {
+    "products": [
+      {
+        "name": "Stonecroft Field Trellis",
+        "category": "Garden",
+        "brand": "Stonecroft",
+        "sku": "GAR-29673",
+        "price": 152.49
+      },
+      {
+        "name": "Ironbridge Trading Classic Soap Bar",
+        "category": "Beauty & Personal Care",
+        "brand": "Ironbridge Trading",
+        "sku": "BEA-93574",
+        "price": 67.52
+      },
+      {
+        "name": "Tidewell Family-Size Pet Bowl",
+        "category": "Pet Supplies",
+        "brand": "Tidewell",
+        "sku": "PET-23482",
+        "price": 88.49
+      }
+    ],
+    "accounts": [
+      {
+        "iban": "GB16OMIY48074988271440",
+        "bic": "DMXTGBK3",
+        "cardNumber": "5522416742574987",
+        "routingNumber": "100183063",
+        "currency": "GBP",
+        "accountType": "Money Market",
+        "merchant": "Lakeview Parking"
+      },
+      {
+        "iban": "DE63494518368977523593",
+        "bic": "YVULDE23",
+        "cardNumber": "4455812978341147",
+        "routingNumber": "096193675",
+        "currency": "EUR",
+        "accountType": "Checking",
+        "merchant": "Brightwater Utilities"
+      },
+      {
+        "iban": "PT72001001014299987057113",
+        "bic": "AVYOPT7B",
+        "cardNumber": "5151711130754250",
+        "routingNumber": "104518281",
+        "currency": "EUR",
+        "accountType": "Line of Credit",
+        "merchant": "Corner Bakehouse"
+      }
+    ],
+    "patients": [
+      {
+        "condition": "Gloomcloud Fatigue (fictional)",
+        "medication": "Brightify (fictional)",
+        "dosage": "25 mg",
+        "specialty": "Psychiatry",
+        "mrn": "FX-5428348"
+      },
+      {
+        "condition": "Pumpernickel Rash (fictional)",
+        "medication": "Smoothaloo (fictional)",
+        "dosage": "20 mg",
+        "specialty": "Dermatology",
+        "mrn": "FX-1892221"
+      },
+      {
+        "condition": "Marmalade Fever (fictional)",
+        "medication": "Sticktoast (fictional)",
+        "dosage": "5 mg",
+        "specialty": "Infectious Disease",
+        "mrn": "FX-1041457"
+      }
+    ]
+  }
+}

@@ -3,6 +3,7 @@ import { infer } from "./infer.js";
 import { run } from "./execute.js";
 import { GraceholderError } from "./errors.js";
 import { LOCALES } from "./vocab/en.js";
+import { resolvePacks } from "./pack-registry.js";
 
 export const DEFAULT_SEED = "graceholder";
 export const DEFAULT_ANCHOR = "2025-01-01T00:00:00.000Z";
@@ -21,6 +22,17 @@ export function checkLocale(locale) {
   }
 }
 
+/** Validate the realism options (images, distributions, packs) and resolve the packs (docs/design.md section 16, Realism). */
+export function realismOptions(options) {
+  const images = options.images ?? "url";
+  if (images !== "url" && images !== "svg") throw new GraceholderError("bad-options", `images must be "url" or "svg", got ${JSON.stringify(images)}`);
+  const distributions = options.distributions ?? "uniform";
+  if (distributions !== "uniform" && distributions !== "realistic") {
+    throw new GraceholderError("bad-options", `distributions must be "uniform" or "realistic", got ${JSON.stringify(distributions)}`);
+  }
+  return { images, realistic: distributions === "realistic", packs: resolvePacks(options.packs) };
+}
+
 /**
  * Infer and execute one query operation. Returns the raw graphql-js result (errors included) with
  * plain JSON-compatible `data`. `world` is the optional world view (src/world.js).
@@ -32,7 +44,10 @@ export function generateResult(query, options = {}, world = undefined) {
   const locale = options.locale ?? "en";
   checkLocale(locale);
   const ms = anchorMs(options.anchorDate ?? DEFAULT_ANCHOR);
+  const realism = realismOptions(options);
   const inferred = infer(query, {
+    packs: realism.packs,
+    realistic: realism.realistic,
     operationName: options.operationName,
     spec: options.spec,
     strict: options.strict,
@@ -44,6 +59,9 @@ export function generateResult(query, options = {}, world = undefined) {
     seed: options.seed ?? DEFAULT_SEED,
     anchorMs: ms,
     locale,
+    images: realism.images,
+    packs: realism.packs,
+    realistic: realism.realistic,
     variables: options.variables,
     poolSize: inferred.spec.options.poolSize,
     endlessTotal: inferred.spec.options.endlessTotal,

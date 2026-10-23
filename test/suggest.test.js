@@ -128,3 +128,16 @@ test("the core has no LLM dependency", () => {
   const banned = /anthropic|openai|langchain|ollama|@google|cohere|mistral|llamaindex|ai-matey/i;
   for (const k of [...Object.keys(pkg.dependencies), ...Object.keys(pkg.devDependencies)]) assert.ok(!banned.test(k), k);
 });
+
+test("suggestSpec knows the packs and distributions the data will be generated with", async () => {
+  const { geo } = await import("../src/packs/geo.js");
+  const q = "{ users { id city timezone } }";
+  const prompt = buildSuggestPrompt(q, undefined, { packs: [geo], distributions: "realistic" });
+  assert.match(prompt, /geo\.timezone/);
+  assert.match(prompt, /timezone \| scalar \| "String" \| heuristic \| P1/);
+  assert.ok(!buildSuggestPrompt(q).includes("geo.timezone"));
+  // a reply that uses a pack generator validates only when the pack is passed
+  const reply = JSON.stringify({ "users.city": { gen: "geo.timezone" } });
+  await assert.rejects(suggestSpec(q, { llm: async () => reply }), (e) => e.code === "bad-suggestion");
+  assert.deepEqual(await suggestSpec(q, { llm: async () => reply, packs: [geo] }), JSON.parse(reply));
+});

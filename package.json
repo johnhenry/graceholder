@@ -19,6 +19,26 @@
       "types": "./src/index.d.ts",
       "default": "./src/index.js"
     },
+    "./packs": {
+      "types": "./src/packs/index.d.ts",
+      "default": "./src/packs/index.js"
+    },
+    "./packs/commerce": {
+      "types": "./src/packs/commerce.d.ts",
+      "default": "./src/packs/commerce.js"
+    },
+    "./packs/finance": {
+      "types": "./src/packs/finance.d.ts",
+      "default": "./src/packs/finance.js"
+    },
+    "./packs/geo": {
+      "types": "./src/packs/geo.d.ts",
+      "default": "./src/packs/geo.js"
+    },
+    "./packs/health": {
+      "types": "./src/packs/health.d.ts",
+      "default": "./src/packs/health.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [

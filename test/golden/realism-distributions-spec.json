@@ -1,0 +1,113 @@
+{
+  "name": "realism-distributions-spec: explicit distributions through the spec",
+  "header": {
+    "locale": "en",
+    "keyScheme": "gh1"
+  },
+  "input": {
+    "query": "{ samples(first: 6) { a b c d e } }",
+    "options": {
+      "seed": "realism"
+    },
+    "spec": {
+      "samples.a": {
+        "gen": {
+          "name": "int",
+          "args": {
+            "min": 0,
+            "max": 100,
+            "dist": "normal"
+          }
+        }
+      },
+      "samples.b": {
+        "gen": {
+          "name": "float",
+          "args": {
+            "min": 0,
+            "max": 1000,
+            "dist": "lognormal"
+          }
+        }
+      },
+      "samples.c": {
+        "gen": {
+          "name": "int",
+          "args": {
+            "min": 1,
+            "max": 500,
+            "dist": "zipf",
+            "s": 1.2
+          }
+        }
+      },
+      "samples.d": {
+        "gen": {
+          "name": "float",
+          "args": {
+            "min": 0,
+            "max": 100,
+            "dist": "powerlaw",
+            "alpha": 1.5
+          }
+        }
+      },
+      "samples.e": {
+        "gen": {
+          "name": "money",
+          "args": {
+            "min": 5,
+            "max": 500,
+            "dist": "lognormal"
+          }
+        }
+      }
+    }
+  },
+  "output": {
+    "samples": [
+      {
+        "a": 39,
+        "b": 14.46,
+        "c": 302,
+        "d": 0.06,
+        "e": 18.26
+      },
+      {
+        "a": 44,
+        "b": 2.75,
+        "c": 1,
+        "d": 2.09,
+        "e": 12.62
+      },
+      {
+        "a": 30,
+        "b": 1.86,
+        "c": 2,
+        "d": 4.89,
+        "e": 31.88
+      },
+      {
+        "a": 87,
+        "b": 12.28,
+        "c": 2,
+        "d": 13.93,
+        "e": 14.48
+      },
+      {
+        "a": 63,
+        "b": 1.04,
+        "c": 221,
+        "d": 1.18,
+        "e": 27.78
+      },
+      {
+        "a": 54,
+        "b": 9.37,
+        "c": 1,
+        "d": 4.58,
+        "e": 16.98
+      }
+    ]
+  }
+}

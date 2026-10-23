@@ -2,7 +2,8 @@
 // imports no LLM SDK, and the model is an injected function.
 import { GraceholderError } from "./errors.js";
 import { inferSchema } from "./index.js";
-import { GENERATOR_NAMES } from "./generators.js";
+import { generatorNames } from "./generators.js";
+import { resolvePacks } from "./pack-registry.js";
 
 /** Bumped when the prompt wording changes. The wording is not part of the output-stability guarantee. */
 export const SUGGEST_PROMPT_VERSION = "suggest-spec/1";
@@ -17,7 +18,8 @@ Precedence per property: exact path (or @Type.field) over "*" over "**"; heurist
 Field spec properties (all optional):
   list / one      boolean, force a list or a single object
   count           n, [min, max] or {"min": 1, "max": 5}, the size of a list (and its declared total)
-  gen             "name" or {"name": "int", "args": {"min": 1, "max": 9}}, a generator for a scalar
+  gen             "name" or {"name": "int", "args": {"min": 1, "max": 9}}, a generator for a scalar;
+                  int, float and money also take "dist": "uniform" | "normal" | "lognormal" | "zipf" | "powerlaw"
   pattern         string; # digit, ? lowercase letter, A uppercase letter, * letter or digit, \\ escapes
   pick            array of values or {"value": v, "weight": n} objects, chosen from deterministically
   nullRate        number from 0 to 1
@@ -31,10 +33,11 @@ Top-level "$options" may set {"poolSize": n, "endlessTotal": n}.`;
 /**
  * @param {string} query
  * @param {Record<string, any>} [spec] an existing spec the model should extend
+ * @param {{ packs?: any[], distributions?: "uniform"|"realistic", images?: "url"|"svg" }} [options] the options generation will use
  * @returns {string}
  */
-export function buildSuggestPrompt(query, spec) {
-  const { sdl, decisions } = inferSchema(query, spec);
+export function buildSuggestPrompt(query, spec, options = {}) {
+  const { sdl, decisions } = inferSchema(query, spec, options);
   const lines = decisions
     .filter((d) => d.kind !== "arg" && d.kind !== "unused")
     .map((d) => `${d.path} | ${d.kind} | ${JSON.stringify(d.value)} | ${d.source}${d.rule ? ` | ${d.rule}` : ""}`);
@@ -59,7 +62,7 @@ export function buildSuggestPrompt(query, spec) {
     GRAMMAR,
     "",
     "## Known generators",
-    GENERATOR_NAMES.join(", "),
+    generatorNames(resolvePacks(options.packs)).join(", "),
     "",
     "## Reply",
     "Return ONLY a JSON object that is a valid spec (no commentary). Use only the generators listed above and only paths that exist in the query.",
@@ -93,7 +96,7 @@ function extractJson(text) {
 }
 
 /** @returns {{ spec: Record<string, any> } | { problems: string[] }} */
-function validate(reply, query) {
+function validate(reply, query, options) {
   if (typeof reply !== "string" || reply.trim() === "") return { problems: ["the reply was empty or not text; return a JSON object"] };
   let spec;
   try {
@@ -105,7 +108,7 @@ function validate(reply, query) {
     return { problems: ["the spec must be a JSON object keyed by path pattern"] };
   }
   try {
-    const { decisions } = inferSchema(query, spec);
+    const { decisions } = inferSchema(query, spec, options);
     const unused = decisions.filter((d) => d.kind === "unused").map((d) => `spec path ${JSON.stringify(d.path)} matches no field in the query`);
     if (unused.length) return { problems: unused };
   } catch (e) {
@@ -118,17 +121,18 @@ function validate(reply, query) {
 /**
  * Ask an injected model for a spec, validate it, and offer one repair round.
  * @param {string} query
- * @param {{ llm: (prompt: string) => Promise<string>, spec?: Record<string, any> }} opts
+ * @param {{ llm: (prompt: string) => Promise<string>, spec?: Record<string, any>, packs?: any[], distributions?: "uniform"|"realistic", images?: "url"|"svg" }} opts
  * @returns {Promise<Record<string, any>>}
  */
-export async function suggestSpec(query, { llm, spec }) {
+export async function suggestSpec(query, { llm, spec, packs, distributions, images }) {
+  const options = { packs, distributions, images };
   if (typeof llm !== "function") throw new GraceholderError("bad-options", "suggestSpec needs an llm function: (prompt) => Promise<string>");
-  const prompt = buildSuggestPrompt(query, spec);
+  const prompt = buildSuggestPrompt(query, spec, options);
   const first = await llm(prompt);
-  let result = validate(first, query);
+  let result = validate(first, query, options);
   if ("spec" in result) return result.spec;
   const second = await llm(buildRepairPrompt(prompt, typeof first === "string" ? first : String(first), result.problems));
-  result = validate(second, query);
+  result = validate(second, query, options);
   if ("spec" in result) return result.spec;
   throw new GraceholderError("bad-suggestion", "the model did not return a valid spec after one repair round", { hint: result.problems.join("\n") });
 }
