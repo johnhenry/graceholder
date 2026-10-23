@@ -240,7 +240,7 @@ export function createWorld(options = {}) {
     ...(options.images !== undefined ? { images: options.images } : {}),
     ...(options.distributions !== undefined ? { distributions: options.distributions } : {}),
   };
-  const base = { seed, spec, anchorDate: anchorIso, locale, strict: options.strict, ...realism };
+  const base = { seed, spec, anchorDate: anchorIso, locale, strict: options.strict, ...realism, schema: options.schema };
 
   const state = new WorldState();
   state.position = mutations.position;

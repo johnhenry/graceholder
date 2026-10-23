@@ -1,7 +1,10 @@
-import type { DocumentNode, GraphQLError } from "graphql";
+import type { DocumentNode, GraphQLError, GraphQLSchema, IntrospectionQuery } from "graphql";
 
 /** Key-scheme version literal (frozen at 1.0.0). */
 export declare const KEY_SCHEME: "gh1";
+
+/** A schema for schema mode: SDL text, a parsed SDL document, an introspection result, or a graphql-js schema. */
+export type SchemaInput = string | DocumentNode | GraphQLSchema | IntrospectionQuery | { data: IntrospectionQuery };
 
 export interface Options {
   /** Default `"graceholder"`. Numbers are stringified (`String(n)`). */
@@ -35,6 +38,11 @@ export interface Options {
    * turns fields named like `salesHistory { date value }` into time series. Default `"uniform"` (the 0.x behaviour).
    */
   distributions?: "uniform" | "realistic";
+  /**
+   * Schema mode: the query is validated against this schema, and enums, nullability, custom scalars,
+   * lists and unions/interfaces come from it instead of from name heuristics.
+   */
+  schema?: SchemaInput;
 }
 
 /** Distribution names accepted by the `dist` argument of `int`, `float` and `money`. */
@@ -112,9 +120,9 @@ export declare function graceholder(query: string | DocumentNode, options: Optio
 export interface Decision {
   path: string;
   field: string;
-  kind: "list" | "object" | "scalar" | "arg" | "type" | "count" | "null" | "key" | "seed" | "unused";
+  kind: "list" | "object" | "scalar" | "arg" | "type" | "count" | "null" | "key" | "seed" | "unused" | "nullable";
   value: unknown;
-  source: "directive" | "spec" | "heuristic" | "default";
+  source: "directive" | "spec" | "heuristic" | "default" | "schema";
   rule?: string;
 }
 
@@ -129,7 +137,7 @@ export interface InferResult {
 export declare function inferSchema(
   query: string | DocumentNode,
   spec?: Spec,
-  options?: Pick<Options, "operationName" | "variables" | "strict" | "packs" | "images" | "distributions">,
+  options?: Pick<Options, "operationName" | "variables" | "strict" | "packs" | "images" | "distributions" | "schema">,
 ): InferResult;
 
 export type ErrorCode =
@@ -150,6 +158,9 @@ export type ErrorCode =
   | "bad-suggestion"
   | "bad-pack"
   | "unknown-pack"
+  | "bad-schema"
+  | "schema-conflict"
+  | "bad-samples"
   | "unsupported"
   | "bad-mutation"
   | "not-found"
@@ -209,6 +220,8 @@ export interface WorldOptions {
   packs?: Array<string | Pack>;
   images?: "url" | "svg";
   distributions?: "uniform" | "realistic";
+  /** Schema mode for the world's queries. */
+  schema?: SchemaInput;
   /** A log from `world.export()`; replayed at creation. */
   log?: WorldEntry[];
 }
@@ -229,3 +242,43 @@ export interface World {
 
 /** A persistent, deterministic world shared across queries. */
 export declare function createWorld(options?: WorldOptions): World;
+
+export interface SpecFromSamplesOptions {
+  /** Schema mode: enums (and their frequencies), nullability, scalar types and list-ness come from the schema. */
+  schema?: SchemaInput;
+  /**
+   * Allow enum-like sets of string values to be copied into the spec as `pick`. `true` allows every
+   * field; an array allows only the listed field paths. Default `false`: free text is never copied.
+   */
+  allowValues?: boolean | string[];
+  /** Largest number of distinct values that counts as an enumeration (default 12). */
+  maxEnum?: number;
+  /** Dates are learned as days before this anchor (default: the library's default anchor). */
+  anchorDate?: string | Date;
+  operationName?: string;
+  variables?: Record<string, unknown>;
+}
+
+export interface SampleNote {
+  path: string;
+  kind: "withheld" | "kept-heuristic" | "skipped";
+  message: string;
+}
+
+/**
+ * Infer a side-car spec from one or more real responses to a query. Deterministic; the result is a plain
+ * object to commit. Never copies free text; see `allowValues`.
+ * @throws {GraceholderError} `bad-samples` when a sample does not fit the query (or the schema)
+ */
+export declare function specFromSamples(
+  query: string | DocumentNode,
+  samples: Data | { data: Data } | Array<Data | { data: Data }>,
+  opts?: SpecFromSamplesOptions,
+): Spec;
+
+/** Like {@link specFromSamples}, and also returns notes about what was withheld or left to the heuristics. */
+export declare function analyzeSamples(
+  query: string | DocumentNode,
+  samples: Data | { data: Data } | Array<Data | { data: Data }>,
+  opts?: SpecFromSamplesOptions,
+): { spec: Spec; notes: SampleNote[] };

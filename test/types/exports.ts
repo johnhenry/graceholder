@@ -1,4 +1,4 @@
-import { graceholder, createWorld, inferSchema, GraceholderError, KEY_SCHEME, type Options, type InferResult, type World, type ExportedWorld } from "@johnhenry/graceholder";
+import { graceholder, createWorld, inferSchema, specFromSamples, analyzeSamples, GraceholderError, KEY_SCHEME, type Options, type InferResult, type World, type ExportedWorld, type Spec, type SampleNote } from "@johnhenry/graceholder";
 
 const k: "gh1" = KEY_SCHEME;
 const opts: Options = { seed: 1, variables: { a: 1 }, anchorDate: new Date(0), locale: "en" };
@@ -16,7 +16,12 @@ try {
     void code;
   }
 }
-void [k, data, maybe, sdl];
+const learned: Spec = specFromSamples("{ users { age } }", [{ users: [{ age: 3 }] }], { allowValues: ["users.status"], maxEnum: 8, schema: "type Query { users: [U!]! } type U { age: Int! }" });
+const analysed: { spec: Spec; notes: SampleNote[] } = analyzeSamples("{ users { age } }", { data: { users: [] } });
+const withSchema: Data2 = graceholder("{ a }", { schema: "type Query { a: Int }" });
+type Data2 = Record<string, unknown>;
+const decisionSource: string = inferSchema("{ a }", undefined, { schema: "type Query { a: Int }" }).decisions[0].source;
+void [k, data, maybe, sdl, learned, analysed, withSchema, decisionSource];
 
 const world: World = createWorld({ seed: "s", spec: { $mutations: { verbs: { archive: "delete" }, position: "start" } } });
 const wr = world.query("mutation { createUser(input: { name: \"x\" }) { id } }", { variables: { a: 1 }, operationName: "M" });

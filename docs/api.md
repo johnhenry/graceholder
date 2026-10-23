@@ -1,7 +1,7 @@
 # API reference
 
 ```js
-import { graceholder, createWorld, inferSchema, registerPack, suggestSpec, buildSuggestPrompt, GraceholderError, KEY_SCHEME } from "@johnhenry/graceholder";
+import { graceholder, createWorld, inferSchema, specFromSamples, analyzeSamples, registerPack, suggestSpec, buildSuggestPrompt, GraceholderError, KEY_SCHEME } from "@johnhenry/graceholder";
 ```
 
 ## `graceholder(query, options?)`
@@ -20,16 +20,17 @@ import { graceholder, createWorld, inferSchema, registerPack, suggestSpec, build
 | `packs` | none | [Vocabulary packs](#packs): names of registered packs or objects imported from `@johnhenry/graceholder/packs/<name>`. |
 | `images` | `"url"` | `"svg"` returns deterministic [inline SVG data URIs](#images) for image fields. |
 | `distributions` | `"uniform"` | `"realistic"` makes popularity fields heavy-tailed and turns `...History`/`...Series` fields into [time series](#distributions-and-time-series). |
+| `schema` | none | [Schema mode](#schema-mode): SDL, an introspection result or a graphql-js schema. Without it the schema is inferred from the query. |
 | `errors` | `"throw"` | `"result"` returns `{ data }` on success and `{ errors }` for GraphQL parse, validation and execution errors (other graceholder errors always throw). |
 
 ## `inferSchema(query, spec?, options?)`
 
-Returns `{ sdl, decisions, document }` without generating data. `sdl` is accepted by graphql-js `buildSchema`. `document` is the selected operation and the fragments it uses with graceholder's directives removed. `options` takes `operationName`, `variables`, `strict`, `packs`, `images` and `distributions` (inference depends on `packs` and `distributions`).
+Returns `{ sdl, decisions, document }` without generating data. `sdl` is accepted by graphql-js `buildSchema`. `document` is the selected operation and the fragments it uses with graceholder's directives removed. `options` takes `operationName`, `variables`, `strict`, `packs`, `images`, `distributions` and `schema` (inference depends on `packs` and `distributions`).
 
 Each decision is `{ path, field, kind, value, source, rule? }`:
 
-- `kind`: `list`, `type`, `scalar`, `arg`, `count`, `object` (pool sharing), `null`, `key`, `seed`, `unused`.
-- `source`: `directive`, `spec`, `heuristic` or `default`.
+- `kind`: `list`, `type`, `scalar`, `arg`, `count`, `object` (pool sharing), `null`, `key`, `seed`, `unused`, `nullable` (schema mode).
+- `source`: `directive`, `spec`, `heuristic`, `default` or `schema`.
 - `rule`: the inference rule, for example `L3` (plural name), `N3` (type name), `T8` (integer by name), `S3` (connection), `S4` (union/interface), `E2-shared`, `L1`/`N1` (overridden), `C-count`, `unused-spec-path`.
 
 ```js
@@ -119,20 +120,20 @@ Generators are pure. Names are used by `@gen` and spec `gen`; an unknown name th
 |---|---|
 | ids | `id.key`, `id.uuid`, `id.int` |
 | number | `int`, `float`, `money`, `percent`, `bool` |
-| text | `word`, `words`, `sentence`, `sentences`, `paragraph`, `title`, `slug`, `lorem` |
+| text | `word`, `words`, `text` (`min`, `max`: length in characters), `sentence`, `sentences`, `paragraph`, `title`, `slug`, `lorem` |
 | person | `person.first`, `person.last`, `person.full`, `person.username`, `person.email`, `person.phone`, `person.jobTitle`, `person.bio`, `person.age` |
 | company and product | `company.name`, `company.domain`, `company.industry`, `product.name` |
 | place | `place.city`, `place.state`, `place.country`, `place.zip`, `place.street`, `place.address`, `place.lat`, `place.lng` |
 | web | `url`, `imageUrl`, `ip`, `hex`, `color` |
 | images | `image.avatar` (initials on a coloured square, `size` 16-1024), `image.geometric` (`width`, `height`): inline SVG data URIs, see [Images](#images) |
 | series | `series.date`, `series.value` (see [time series](#distributions-and-time-series)) |
-| time | `datetime`, `time.created`, `time.updated`, `time.published`, `time.deleted`, `time.birthday` |
+| time | `datetime` (`minDaysAgo`, `maxDaysAgo`, `format`: `"datetime"` or `"date"`), `time.created`, `time.updated`, `time.published`, `time.deleted`, `time.birthday` |
 | choice | `oneOf`, `pattern` |
 | graph | `count.of`, `order.subtotal`, `order.tax`, `order.total` (computed from the entity graph) |
 
 ## `createWorld(options?)`
 
-A persistent, deterministic world shared across queries: pinned entities, and mutations that change what later queries see. Options: `seed`, `spec`, `anchorDate`, `locale`, `strict` (as for `graceholder`) and `log` (a previous `export().log`). With no pins and no mutations it answers exactly like `graceholder` with the same options.
+A persistent, deterministic world shared across queries: pinned entities, and mutations that change what later queries see. Options: `seed`, `spec`, `anchorDate`, `locale`, `strict`, `schema`, `packs`, `images`, `distributions` (as for `graceholder`) and `log` (a previous `export().log`). With no pins and no mutations it answers exactly like `graceholder` with the same options.
 
 - `world.query(query, { variables, operationName })` runs a query or a mutation and returns a GraphQL result, `{ data }` or `{ data?, errors }`; it does not throw for a bad request (the graceholder code is in `errors[i].extensions.code`).
 - `world.pin("Type:key", { field: value })` overrides fields of one entity; `name`, `firstName` or `lastName` pins keep `email`, `username` and the other name fields coherent. Returns the world.
@@ -253,6 +254,138 @@ Pack generators: `geo` overrides `place.city`, `place.state`, `place.country`, `
 
 Vocabulary is hand-written, checksummed in tests and recorded in `src/packs/PROVENANCE.md`; like every table it is frozen at 1.0.0.
 
+## Schema mode
+
+`graceholder(query, { schema })` (also `inferSchema(query, spec, { schema })`) validates the query against a real schema and takes everything the query cannot say from it. `schema` is SDL text, a parsed SDL document, an introspection result (`{ __schema }` or `{ data: { __schema } }`) or a graphql-js `GraphQLSchema`; the four give identical output.
+
+- **From the schema:** object or scalar, list or single value, type names, nullability, enums (values drawn uniformly), custom scalars (mapped by name: `DateTime`, `Date`, `URL`, `Email`, `UUID`, `BigInt`, ...), arguments with their defaults, Relay connections (recognised on the schema's types), and the possible types of unions and interfaces. Plural names, singularising and the list and type rules are not used.
+- **Still from the name:** the generator of a built-in scalar, when its type fits the declared one (`email: String!` is an email, `age: Int!` an age). Otherwise a plain generator of the declared type.
+- **Pools:** each object type is one pool, so `user(id: 5)` is the same user everywhere. A field of an interface type can be any implementing type; a union field is one of the members the query names in a fragment (all members if it names none).
+- **Non-null:** values are not randomly null, even for nullable fields (as without a schema), and a non-null field is never null. `nullRate` on a non-null field is a conflict.
+- **Directives and spec entries must agree with the schema.** A `@list`/`@one` that contradicts the schema, a `@type` naming another type, a `nullRate` on a non-null field, a `@gen` whose output does not fit the declared type, or a `@pick` value that is not in the enum throws `schema-conflict` (also from `inferSchema`).
+- **Reporting:** `inferSchema` returns the schema's SDL and decisions with `source: "schema"` (kinds `list`, `type`, `scalar`, `arg`, `nullable`).
+- Validation problems (unknown field, missing or mistyped argument, bad enum value) throw `graphql`, as without a schema. An unreadable schema is `bad-schema`.
+
+```js
+import { graceholder } from "@johnhenry/graceholder";
+
+const schema = `
+  enum Role { ADMIN EDITOR VIEWER }
+  type User { id: ID! name: String! role: Role! tags: [String!]! settings: Settings! nickname: String }
+  type Settings { theme: String! }
+  type Query { user(id: ID!): User! }
+`;
+const { user } = graceholder("{ user(id: 7) { id role tags settings { theme } } }", { schema, seed: "demo" });
+console.log({ id: user.id, role: user.role, tagCount: user.tags.length, settings: Object.keys(user.settings) });
+```
+
+```json
+{
+  "id": "7",
+  "role": "VIEWER",
+  "tagCount": 3,
+  "settings": [
+    "theme"
+  ]
+}
+```
+
+## `specFromSamples(query, samples, options?)`
+
+Learns a [side-car spec](#side-car-spec) from real responses, so output looks like a real API without a hand-written spec and without an LLM. `samples` is one response or an array of them (each a response's `data`, or `{ data }`). Response keys (aliases) are read from the samples; the spec is written with field names. The result is a plain object to commit; the function is deterministic and does not depend on the order of the samples. `analyzeSamples` returns `{ spec, notes }`, where `notes` explain what was withheld or left to the heuristics (`kind`: `withheld`, `kept-heuristic`, `skipped`).
+
+| Option | Default | Meaning |
+|---|---|---|
+| `schema` | none | Schema mode: enums (and their frequencies), nullability, list-ness and `Int` vs `Float` come from the schema. A sample that contradicts the schema is `bad-samples`. |
+| `allowValues` | `false` | `true`, or an array of field paths: enum-like sets of strings may be copied into `pick`. See privacy. |
+| `maxEnum` | `12` | The most distinct values an enum-like set may have. |
+| `anchorDate` | the default anchor | Dates are learned as days before this date. |
+| `operationName`, `variables` | none | As for `graceholder`. |
+
+What is learned: list sizes (`count`), null rates (`nullRate`), integer and float ranges and precision (`int`, `float` with `min`, `max`, `decimals`), boolean ratios (`bool` with `p`), date ranges (`datetime` with `minDaysAgo`, `maxDaysAgo`, and `format: "date"` for plain dates), formats (`id.uuid`, `person.email`, `url`, `imageUrl`, `ip`, `hex`, `id.int`, or a `pattern` such as `SKU-####`), enum-like value sets (`pick`, only when permitted), string length ranges (`text`), `list`/`one` where the heuristic guesses the wrong shape, and connection sizes from `totalCount`.
+
+**Privacy.** By default no sample string is copied into the spec: only formats and statistics. Enum-like sets are withheld unless `allowValues` allows them; a schema enum is the exception, because its members are already in the schema. Personal-name generators are never copied from, even with `allowValues`. A constant alphabetic prefix of at most 5 letters directly followed by a digit or separator (`SKU-`, `usr_`) is treated as part of an ID format when at least two distinct values share it.
+
+Fields whose value is an identity or an aggregate (`id`, `xId`, counts of a collection, order totals) and fields a directive already configures are not learned. Dates for `createdAt`, `updatedAt` and similar stay coherent when they already lie in the generator's range. Fields are learned independently; correlations are not.
+
+```js
+import { specFromSamples, graceholder } from "@johnhenry/graceholder";
+
+const query = "{ orders { code status amount shippedAt note } }";
+const response = { orders: [
+  { code: "ORD-1041", status: "shipped", amount: 59.9, shippedAt: "2024-11-02T09:30:00Z", note: null },
+  { code: "ORD-1042", status: "pending", amount: 12.5, shippedAt: null, note: "leave at the door" },
+  { code: "ORD-1087", status: "shipped", amount: 230, shippedAt: "2024-12-12T16:05:00Z", note: null },
+  { code: "ORD-1101", status: "shipped", amount: 19.99, shippedAt: "2024-12-20T08:00:00Z", note: null },
+] };
+
+const spec = specFromSamples(query, response);              // no values are copied
+const withValues = specFromSamples(query, response, { allowValues: ["orders.status"] });
+console.log({ spec, status: withValues["orders.status"], sample: graceholder(query, { spec: withValues, seed: "x" }).orders[0] });
+```
+
+```json
+{
+  "spec": {
+    "orders": {
+      "count": 4
+    },
+    "orders.code": {
+      "pattern": "ORD-####"
+    },
+    "orders.amount": {
+      "gen": {
+        "name": "float",
+        "args": {
+          "min": 12.5,
+          "max": 230,
+          "decimals": 2
+        }
+      }
+    },
+    "orders.shippedAt": {
+      "nullRate": 0.25,
+      "gen": {
+        "name": "datetime",
+        "args": {
+          "minDaysAgo": 11,
+          "maxDaysAgo": 60
+        }
+      }
+    },
+    "orders.note": {
+      "nullRate": 0.75,
+      "gen": {
+        "name": "text",
+        "args": {
+          "min": 17,
+          "max": 17
+        }
+      }
+    }
+  },
+  "status": {
+    "pick": [
+      {
+        "value": "shipped",
+        "weight": 3
+      },
+      {
+        "value": "pending",
+        "weight": 1
+      }
+    ]
+  },
+  "sample": {
+    "code": "ORD-1999",
+    "status": "shipped",
+    "amount": 184.8,
+    "shippedAt": "2024-12-10T20:55:56.211Z",
+    "note": null
+  }
+}
+```
+
 ## `suggestSpec(query, { llm, spec? })`
 
 An authoring-time helper. `llm` is `(prompt: string) => Promise<string>`. It builds a prompt (`buildSuggestPrompt(query, spec?)`) with the query, the inferred SDL and decisions, the spec grammar and the generator names, parses the reply (a bare JSON object, a fenced block or prose around a JSON object), and validates it: Spec schema, generator names, path syntax, conflicts, and paths that match no field. Pass the `packs`, `distributions` and `images` you generate with so the prompt lists the pack generators and the validation accepts them. On failure it re-prompts once with the problems; then it throws `bad-suggestion` (`hint` lists the problems). The prompt wording is versioned (`SUGGEST_PROMPT_VERSION`) and is not part of the output-stability guarantee. `suggestSpec` is never called by generation.
@@ -276,6 +409,9 @@ An authoring-time helper. `llm` is `(prompt: string) => Promise<string>`. It bui
 | `bad-mutation`, `not-found` | a world could not read a mutation (unknown verb, no identifying argument, duplicate id); update, delete or pin of a deleted entity |
 | `unknown-pack`, `bad-pack` | `packs` names a pack that is not registered; an invalid pack, or a different pack under a used name |
 | `bad-suggestion` | `suggestSpec` reply still invalid after the repair round |
+| `bad-schema` | the `schema` option is unreadable or invalid, has no query root, or an abstract type has no members |
+| `schema-conflict` | a directive or spec entry contradicts the schema (list or single value, `@type`, `nullRate` on a non-null field, a generator whose output does not fit, an enum value that is not declared) |
+| `bad-samples` | `specFromSamples`: a sample does not fit the query (or the schema), or no sample was given |
 | `unsupported` | several concrete types where one is required |
 | `internal` | a bug |
 

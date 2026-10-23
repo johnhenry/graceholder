@@ -149,6 +149,16 @@ function buildBase(V) {
     sentence: ({ stream: s }) => sentence(s),
     sentences: ({ stream: s, args }) => sentences(s, intArg("sentences", args, "n", 2)),
     paragraph: ({ stream: s }) => sentences(s, s.int(3, 6)),
+    // vocabulary words joined by spaces, cut to a length drawn from [min, max] characters (specFromSamples)
+    text: ({ stream: s, args }) => {
+      const [min, max] = range("text", args, 0, 40);
+      if (!Number.isInteger(min) || !Number.isInteger(max) || min < 0) throw badArgs("text", "min and max must be non-negative integers");
+      const len = s.int(min, max);
+      let out = "";
+      while (out.length < len) out += (out ? " " : "") + s.pick(V.words);
+      out = out.slice(0, len);
+      return out.endsWith(" ") ? out.slice(0, -1) + "e" : out;
+    },
     title: ({ stream: s }) => wordList(s, s.int(3, 6)).map(cap).join(" "),
     slug: ({ stream: s }) => wordList(s, s.int(2, 4)).join("-"),
     lorem: ({ stream: s, args }) =>
@@ -227,7 +237,10 @@ function buildBase(V) {
       const min = intArg("datetime", args, "minDaysAgo", 0);
       const max = intArg("datetime", args, "maxDaysAgo", 365);
       if (min > max) throw badArgs("datetime", "minDaysAgo is greater than maxDaysAgo");
-      return new Date(anchorMs - s.int(min * DAY_MS, max * DAY_MS)).toISOString();
+      const iso = new Date(anchorMs - s.int(Math.round(min * DAY_MS), Math.round(max * DAY_MS))).toISOString();
+      if (args.format === undefined || args.format === "datetime") return iso;
+      if (args.format === "date") return iso.slice(0, 10);
+      throw badArgs("datetime", 'format must be "datetime" or "date"');
     },
     "time.created": (ctx) => new Date(ctx.anchorMs - createdAge(ctx)).toISOString(),
     "time.updated": (ctx) => new Date(ctx.anchorMs - updatedAge(ctx)).toISOString(),

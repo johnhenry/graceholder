@@ -153,3 +153,26 @@ test("time.*: created <= updated <= anchor, deleted is null by default", () => {
     assert.ok(Date.parse(d) >= u && Date.parse(d) <= ANCHOR);
   }
 });
+
+test("text: a length drawn from [min, max], made of vocabulary words", () => {
+  const out = many("text", { min: 5, max: 30 }, 200);
+  for (const s of out) {
+    assert.ok(s.length >= 5 && s.length <= 30, s);
+    assert.ok(!s.endsWith(" ") && !s.startsWith(" "), JSON.stringify(s));
+  }
+  assert.ok(new Set(out.map((s) => s.length)).size > 15, "lengths spread over the range");
+  assert.deepEqual(many("text", { min: 0, max: 0 }, 5), ["", "", "", "", ""]);
+  assert.ok(many("text", { min: 3, max: 3 }).every((s) => s.length === 3));
+  for (const args of [{ min: 5, max: 2 }, { min: -1, max: 4 }, { min: 1.5, max: 4 }]) {
+    assert.throws(() => generate("text", ctxFor(1, args)), (e) => e.code === "bad-generator-args");
+  }
+});
+
+test("datetime: format date gives YYYY-MM-DD; fractional day bounds are rounded to milliseconds", () => {
+  for (const s of many("datetime", { minDaysAgo: 3, maxDaysAgo: 40, format: "date" })) assert.match(s, /^\d{4}-\d{2}-\d{2}$/);
+  for (const s of many("datetime", { minDaysAgo: 0.5, maxDaysAgo: 1.5, format: "datetime" })) {
+    assert.ok(ANCHOR - Date.parse(s) >= 0.5 * 86400000 && ANCHOR - Date.parse(s) <= 1.5 * 86400000);
+  }
+  for (const s of many("datetime", { minDaysAgo: -10, maxDaysAgo: -2 })) assert.ok(Date.parse(s) > ANCHOR, "negative days are in the future");
+  assert.throws(() => generate("datetime", ctxFor(1, { format: "epoch" })), (e) => e.code === "bad-generator-args");
+});

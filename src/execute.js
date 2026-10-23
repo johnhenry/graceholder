@@ -13,7 +13,6 @@ import { tokenize, typeNameFor } from "./naming.js";
 export const POOL_SIZE = 100;
 export const ENDLESS_TOTAL = 1000;
 const MAX_WINDOW = 10000;
-const ROOT = "Query";
 const encoder = new TextEncoder();
 
 const bad = (msg, path) => new GraceholderError("bad-arguments", msg, { path });
@@ -107,18 +106,19 @@ const UPDATED_FIELDS = new Set(["updatedAt", "updated_at", "updatedOn", "modifie
 const slugify = (v) => String(v).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 
 /**
- * @param {{ sdl: string, document: any, model: Map<string, Map<string, any>>, abstracts: Map<string, any>, opSeed?: string }} inferred
+ * @param {{ sdl: string, document: any, model: Map<string, Map<string, any>>, abstracts: Map<string, any>, opSeed?: string, schema?: import("graphql").GraphQLSchema, rootType?: string }} inferred
  * @param {{ seed: string|number, anchorMs: number, locale?: string, variables?: Record<string, unknown>, poolSize?: number, endlessTotal?: number, world?: any, images?: "url"|"svg", packs?: any[], realistic?: boolean }} opts
  * @returns {import("graphql").ExecutionResult}
  */
 export function run(inferred, opts) {
-  const schema = buildSchema(inferred.sdl);
+  const schema = inferred.schema ?? buildSchema(inferred.sdl);
   const invalid = validate(schema, inferred.document);
   if (invalid.length) return { errors: invalid };
   const packs = opts.packs ?? [];
   const realistic = Boolean(opts.realistic);
   /** geo-style types (`address`, `location`) share their parent's persona so the parent's and the address's city agree */
   const inherits = (typeName) => packs.some((p) => p.inherit?.(typeName));
+  const ROOT = inferred.rootType ?? "Query";
   const poolSize = opts.poolSize ?? POOL_SIZE;
   const endlessTotal = opts.endlessTotal ?? ENDLESS_TOTAL;
   const rootSeed = inferred.opSeed ?? opts.seed;
