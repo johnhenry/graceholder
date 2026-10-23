@@ -17,6 +17,15 @@ for (const file of files) {
   });
 }
 
-test("golden directory is readable", () => {
-  assert.ok(Array.isArray(files));
+test("the golden suite is present (at least 5 representative queries)", () => {
+  assert.ok(files.length >= 5, `found ${files.length} golden files`);
+});
+
+test("golden headers record locale and key scheme", () => {
+  for (const file of files) {
+    const g = readGolden(file);
+    assert.equal(g.header.locale, "en", file);
+    assert.equal(g.header.keyScheme, "gh1", file);
+    assert.ok(g.output !== null, `${file} has no recorded output (run npm run golden:update)`);
+  }
 });

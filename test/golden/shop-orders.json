@@ -1,0 +1,208 @@
+{
+  "name": "shop-orders",
+  "header": {
+    "locale": "en",
+    "keyScheme": "gh1"
+  },
+  "input": {
+    "query": "query Shop {\n  orders {\n    id\n    code\n    total\n    subtotal\n    createdAt\n    items { name price quantity }\n    customer { name city country zip }\n  }\n  products { name description sku status }\n}",
+    "options": {
+      "seed": "shop"
+    }
+  },
+  "output": {
+    "orders": [
+      {
+        "id": "1",
+        "code": "deserunt consequat",
+        "total": 65.01,
+        "subtotal": 422.93,
+        "createdAt": "2024-07-15T18:21:42.032Z",
+        "items": [
+          {
+            "name": "Ergonomic Candle",
+            "price": 474.74,
+            "quantity": 5
+          },
+          {
+            "name": "Smart Keyboard",
+            "price": 466.37,
+            "quantity": 5
+          },
+          {
+            "name": "Organic Speaker",
+            "price": 358.71,
+            "quantity": 7
+          },
+          {
+            "name": "Vintage Notebook",
+            "price": 113.92,
+            "quantity": 4
+          },
+          {
+            "name": "Lightweight Chair",
+            "price": 65.53,
+            "quantity": 4
+          },
+          {
+            "name": "Ergonomic Backpack",
+            "price": 483.19,
+            "quantity": 6
+          },
+          {
+            "name": "Classic Backpack",
+            "price": 431.9,
+            "quantity": 2
+          },
+          {
+            "name": "Vintage Bottle",
+            "price": 178.28,
+            "quantity": 4
+          },
+          {
+            "name": "Sturdy Blanket",
+            "price": 220.32,
+            "quantity": 3
+          },
+          {
+            "name": "Modular Umbrella",
+            "price": 405.36,
+            "quantity": 3
+          }
+        ],
+        "customer": {
+          "name": "Maya Okafor",
+          "city": "Arlington",
+          "country": "United States",
+          "zip": "06034"
+        }
+      },
+      {
+        "id": "2",
+        "code": "id in",
+        "total": 69.94,
+        "subtotal": 84.65,
+        "createdAt": "2024-10-14T09:07:43.872Z",
+        "items": [
+          {
+            "name": "Ergonomic Kettle",
+            "price": 347.19,
+            "quantity": 5
+          },
+          {
+            "name": "Organic Planter",
+            "price": 168.59,
+            "quantity": 1
+          },
+          {
+            "name": "Sleek Toolkit",
+            "price": 345.76,
+            "quantity": 4
+          },
+          {
+            "name": "Premium Mug",
+            "price": 63.82,
+            "quantity": 5
+          }
+        ],
+        "customer": {
+          "name": "Wei Gupta",
+          "city": "Fredericton",
+          "country": "United States",
+          "zip": "E3B 4Q5"
+        }
+      },
+      {
+        "id": "3",
+        "code": "nisi non",
+        "total": 954.6,
+        "subtotal": 246.78,
+        "createdAt": "2024-05-09T21:45:04.454Z",
+        "items": [
+          {
+            "name": "Everyday Chair",
+            "price": 28.33,
+            "quantity": 1
+          },
+          {
+            "name": "Premium Mug",
+            "price": 39.86,
+            "quantity": 6
+          },
+          {
+            "name": "Sleek Clock",
+            "price": 150.02,
+            "quantity": 2
+          },
+          {
+            "name": "Sturdy Speaker",
+            "price": 442.94,
+            "quantity": 3
+          }
+        ],
+        "customer": {
+          "name": "Zara Hartley",
+          "city": "Bristol",
+          "country": "United States",
+          "zip": "45025"
+        }
+      }
+    ],
+    "products": [
+      {
+        "name": "Smart Keyboard",
+        "description": "Sed quos in provident enim sed molestias quas.",
+        "sku": "DGU-96040",
+        "status": "active"
+      },
+      {
+        "name": "Deluxe Keyboard",
+        "description": "Cupiditate labore do anim eiusmod aute.",
+        "sku": "EKL-86294",
+        "status": "archived"
+      },
+      {
+        "name": "Classic Clock",
+        "description": "Nulla blanditiis labore accusamus cupiditate ad.",
+        "sku": "CZA-95687",
+        "status": "pending"
+      },
+      {
+        "name": "Portable Tote",
+        "description": "Velit velit sint nostrud voluptate ex.",
+        "sku": "SVJ-23569",
+        "status": "resolved"
+      },
+      {
+        "name": "Premium Wallet",
+        "description": "Quos proident dolor quis non ducimus cupiditate laboris exercitation doloremque ea occaecati laudantium excepteur.",
+        "sku": "EJX-87297",
+        "status": "published"
+      },
+      {
+        "name": "Smart Headphones",
+        "description": "Fugiat aliquip nulla ea eu sunt pariatur aute nisi labore excepturi elit voluptatem dolore.",
+        "sku": "FJD-07948",
+        "status": "resolved"
+      },
+      {
+        "name": "Rustic Chair",
+        "description": "Velit qui quis velit sint voluptatem ea.",
+        "sku": "VLE-38014",
+        "status": "open"
+      },
+      {
+        "name": "Classic Backpack",
+        "description": "Pariatur exercitation labore laudantium velit at consequat vero consectetur.",
+        "sku": "ZOU-76228",
+        "status": "pending"
+      },
+      {
+        "name": "Classic Clock",
+        "description": "Voluptate mollitia consequat amet excepturi voluptatem quos nisi amet fugiat quas proident laudantium.",
+        "sku": "PEP-06122",
+        "status": "published"
+      }
+    ]
+  }
+}

@@ -1,6 +1,6 @@
 # graceholder design
 
-Status: proposed (pre-implementation). Package: `@johnhenry/graceholder`. This document replaces the 40-line `mock-ql-sculptor` code on the old `main`.
+Status: M0 and M1 implemented; the open questions are resolved (section 15) and implementation decisions are logged in section 16. Package: `@johnhenry/graceholder`. This document replaces the 40-line `mock-ql-sculptor` code on the old `main`.
 
 **Goal:** consistently repeatable generated data, in any shape we want, from a GraphQL query.
 
@@ -90,12 +90,14 @@ Properties that follow: renaming an alias, reordering fields, adding or removing
 
 | Helper | Definition |
 |---|---|
-| `u64(n)` | n-th SplitMix64 output |
-| `float(n)` | `Number(u64(n) >> 11n) / 2**53`, in `[0,1)` |
-| `int(n, lo, hi)` | `lo + Number(u64(n) % BigInt(hi - lo + 1))` (inclusive). Modulo bias is accepted and frozen. |
-| `pick(n, arr)` | `arr[int(n, 0, arr.length-1)]` |
-| `weighted(n, [[v,w],...])` | cumulative weights over `float(n)` |
-| `bool(n, p)` | `float(n) < p` |
+| `u64()` | next SplitMix64 output of the stream |
+| `float()` | `Number(u64() >> 11n) / 2**53`, in `[0,1)` |
+| `int(lo, hi)` | Inclusive and unbiased. With `range = hi - lo + 1` and `limit = 2^64 - (2^64 mod range)`, draw u64 values until one is `< limit`, then return `lo + (draw mod range)`. At least one draw is always consumed, even for `lo == hi`. Bounds must be safe integers and `range <= 2^53`. (Hub decision: no modulo bias.) |
+| `pick(arr)` | `arr[int(0, arr.length-1)]` |
+| `weighted([[v,w],...])` | cumulative weights over `float() * totalWeight` |
+| `bool(p)` | `float() < p` |
+
+The implementation is a local **stream** over the SplitMix64 sequence: each helper call consumes the next draw(s). A generator's output is therefore a pure function of its key and of the order of its own helper calls. `u64(n)` in earlier drafts is the n-th draw of this stream.
 
 Derived keys: `sub(key, name)` = the same key string with `name` appended as an extra `subKey`; used by generators that need independent sub-values.
 
@@ -232,7 +234,7 @@ Argument types are inferred from usage: a literal gives `Int`/`Float`/`String`/`
 
 ### 4.4 Unions and interfaces
 
-`... on X` fragments on a field define possible types. A field with `... on A`, `... on B` and no common concrete selection becomes `union <Name>Union = A | B`. If fields are selected outside the inline fragments, they become an `interface <Name>` with those fields and A, B implement it. The concrete type of an entity is chosen by `pick(hash(key("e", ifaceName, entityKey, "__typename")), possibleTypes)` unless weighted by spec/`@oneOf`. `__typename` is always the resolved concrete type.
+`... on X` fragments on a field define possible types. A field with `... on A`, `... on B` and no common concrete selection becomes `union <Name>Union = A | B`. If fields are selected outside the inline fragments, they become an `interface <Name>` with those fields and A, B implement it. The concrete type of an entity is chosen by `pick(hash(key("e", ifaceName, entityKey, "__typename")), possibleTypes)` unless weighted by spec/`@pick`. `__typename` is always the resolved concrete type.
 
 ### 4.5 Output SDL conventions
 
@@ -252,13 +254,13 @@ All directives are removed (the document is rewritten) before validation and exe
 | `@count(n: 5)` / `@count(min: 2, max: 8)` | collection size / range |
 | `@gen(name: "name.first", ...args)` | named generator with args (catalogue), arbitrary extra args become the `args` object |
 | `@pattern(p: "ORD-#####")` | pattern string: `#` digit, `?` lowercase letter, `A` uppercase letter, `*` alphanumeric, `\` escapes |
-| `@oneOf(values: [...])` | pick from a fixed set (weights via `{value,weight}` objects) |
+| `@pick(values: [...])` | pick from a fixed set (weights via `{value,weight}` objects) |
 | `@nullRate(p: 0.2)` | probability of `null` (field becomes nullable) |
 | `@derive(from: "firstName")` | derive from another field of the same entity (see 6.3 for forms: a field name, or `"upper(name)"`-style expressions are NOT supported in v1) |
 | `@type(name: "User")` | set/unify the type name (shares the pool) |
 | `@seed(s: "x")` | override the seed for this subtree (inner overrides outer) |
 
-The brief writes `@gen(name, ...args)`: concrete syntax is `@gen(name: "number.int", min: 1, max: 5)`. A single positional-like shorthand `@oneOf(["a","b"])` is not valid GraphQL, so the argument is named `values`. Also `@type(name: "User")` and `@pattern(p: "...")`.
+The brief writes `@gen(name, ...args)`: concrete syntax is `@gen(name: "number.int", min: 1, max: 5)`. A single positional-like shorthand `@pick(["a","b"])` is not valid GraphQL, so the argument is named `values`. Also `@type(name: "User")` and `@pattern(p: "...")`.
 
 ### 5.2 Side-car spec
 
@@ -268,7 +270,7 @@ interface FieldSpec {
   list?: boolean; one?: boolean;               // shape
   count?: number | [number, number] | { min: number; max: number };
   gen?: string | { name: string; args?: Record<string, unknown> };
-  pattern?: string; oneOf?: Array<unknown | { value: unknown; weight: number }>;
+  pattern?: string; pick?: Array<unknown | { value: unknown; weight: number }>;
   nullRate?: number; derive?: { from: string };
   type?: string; seed?: string | number;
   key?: string | string[];                      // identifying arguments
@@ -461,7 +463,7 @@ Spec:
 {
   "orders.code":  { "pattern": "ORD-#####" },
   "posts.author": { "type": "User" },
-  "*.status":     { "oneOf": ["draft", "published", "archived"] },
+  "*.status":     { "pick": ["draft", "published", "archived"] },
   "tags":         { "count": [1, 3] }
 }
 ```
@@ -486,7 +488,7 @@ type Item { name: String! price: Float! quantity: Int! }
 
 (`user(id:)` argument typing is by literal: `5` -> `Int`; with `me: user(id: "5")` it would be `String`.)
 
-Decisions (excerpt): `posts` list (L2 paging arg; L3 plural), `posts.author` -> `User` (spec, `source:"spec"`, shared pool), `orders` count 2..4 (directive), `commentCount` Int (T8), `status` oneOf (spec `*.status`), `total` Float (contextual order rule), `tags` list of String (L3), count 1..3 (spec).
+Decisions (excerpt): `posts` list (L2 paging arg; L3 plural), `posts.author` -> `User` (spec, `source:"spec"`, shared pool), `orders` count 2..4 (directive), `commentCount` Int (T8), `status` pick (spec `*.status`), `total` Float (contextual order rule), `tags` list of String (L3), count 1..3 (spec).
 
 Output shape (values illustrative; real values are frozen by golden files once implemented):
 
@@ -570,15 +572,37 @@ Scope: section 10; README, API docs, STABILITY.md, cookbook; browser build verif
 - [ ] Bundle size measured and documented; zero runtime deps except `graphql`
 - [ ] Trusted publishing configured; README examples run as tests
 
-## 15. Open questions
+## 15. Open questions (resolved)
 
-1. **Locales beyond `en`.** v1 ships `en` only. Do we want a second locale before 1.0 to prove the abstraction, and who curates the vocab?
-2. **Default sharing of inferred types.** Section 3.2 follows the brief (same inferred type name shares a pool). The risk is surprise coupling (`author` in two unrelated places is the same pool). Alternative: owned by default, share only via `@type`/spec. Which default?
-3. **Default pool size** (100) for shared singular references, and the `endlessTotal` (1000): acceptable?
-4. **`anchorDate` default** constant `2025-01-01T00:00:00.000Z`: fine, or something later?
-5. **graphql-js version range** (16 only, or 17 as well).
-6. **Directive spelling** `@gen(name: "...", ...)` and `@oneOf(values: [...])` instead of positional arguments, since GraphQL has no positional arguments (and `@oneOf` collides with the GraphQL `@oneOf` input directive in newer specs; consider `@pick`). Acceptable?
-7. **Vocabulary source.** Hand-curated public-domain lists vs. generating tables from faker at authoring time (licence MIT, content provenance mixed). Preference?
-8. **Modulo bias** in `int()` is accepted for simplicity; fine for mock data?
-9. **Expression language for `@derive`** (e.g. `upper(name)`, templates): deferred; is a template string (`"{firstName}.{lastName}@x.com"`) worth adding in v1?
-10. **Non-null vs nullable** inferred SDL (non-null by default): is that what consumers want when they feed the SDL to other tools?
+All ten questions were decided before implementation (defaults chosen by the hub, easy to change before 1.0):
+
+1. **Locales beyond `en`:** deferred past 1.0.
+2. **Default sharing of inferred types:** inferred types of the same name share one pool by default; `inferSchema` reports each sharing decision; opt out per type with spec `own: true` (M4).
+3. **Pool size 100, `endlessTotal` 1000:** accepted.
+4. **`anchorDate` default `2025-01-01T00:00:00.000Z`:** accepted.
+5. **graphql-js range:** `^16` only; revisit 17 when it is stable and the golden tests pass on it.
+6. **Directive spelling:** `@gen(name: ...)` stays; `@oneOf` is renamed **`@pick`** (and the spec property is `pick`) to avoid the GraphQL spec's input `@oneOf`. The `oneOf` *generator* keeps its catalogue name.
+7. **Vocabulary source:** hand-curated, original or public-domain tables (no faker-derived content).
+8. **Modulo bias:** none. `int()` uses rejection sampling (section 2.3).
+9. **`@derive` expression language:** deferred; copy/transform forms only in v1.
+10. **Non-null by default:** accepted.
+
+## 16. Implementation decisions
+
+Choices made while implementing, where the text above was ambiguous or needed a correction. Later milestones append here.
+
+### M1
+
+- **Files.** Plain JS with hand-written `src/index.d.ts` (no build step). `src/xxh64.js`, `rng.js`, `key.js`, `naming.js`, `rules.js`, `infer.js`, `execute.js`, `generators.js`, `vocab/en.js`.
+- **Only `query` operations** are supported; mutations and subscriptions throw `bad-operation`. Fragments the operation does not reach are dropped before validation. The document is validated against the inferred schema, so GraphQL's own rules apply (for example, unused variables are an error).
+- **Spec is not supported yet:** passing `spec` throws `unsupported` (M4). Inline directives other than `@skip`/`@include` throw `unknown-directive`.
+- **Arguments are typed but not used.** In M1 argument values never change identity or counts (M2 adds identifying arguments, filters and paging). Literals are typed `Int`/`Float`/`String`/`Boolean`/list/input object and are nullable (`user(id: Int)`, not `Int!`); variables use their declared type; if an argument is seen with differing types the nullable form of the first wins. Enum literals and empty objects/lists use the pass-through scalar `GraceholderAny`; unknown named variable types become pass-through custom scalars. Object literals become `input <Field><Arg>Input`.
+- **Entity keys (section 3, subset).** Top-level lists are the shared pool (member `i` has key `String(i)`, 1-based); nested lists are owned (`<parentKey>.<field>.<i>`); a top-level singular field is entity `1`; a nested singular field is a reference `int(1, 100)` into the pool of its type. List counts are `int(3, 10)` from the `l`-scope key; scalar lists use the same count, with the element index as a sub-key.
+- **`id` values.** A decimal entity key is the id; for non-decimal (owned) keys the id is `int(1, 999999)` from the entity's own `id` key, so ids look like ids. `xId` fields are `id.int` in `1..100` as strings.
+- **Type names.** N2 considers type conditions applied directly to a field's selection (named spreads and inline fragments, looking through condition-less inline fragments). Two different conditions on one field throw `unsupported` (unions arrive in M2). Two occurrences of one field that disagree on type throw `conflicting-shape`, as does a field used both with and without a sub-selection. A type with no selected fields other than `__typename` gets a placeholder `_empty: String` field in the SDL.
+- **Singularizer refinements** (the section 4.2 text produced wrong results on common words): `ies -> y` only when a consonant precedes it, with an irregular entry for `-ie` words (`movies`, `cookies`, `pies`, `ties`, `lies`, `zombies`, `selfies`, `rookies`, `calories`) and unchanged `species`/`series`; `(ss|x|ch|sh)es` drops `es` (`addresses -> address`, `boxes`, `watches`, `dishes`), but plain `ses`/`zes` drop only the `s` (`cases -> case`, `databases -> database`, `prizes -> prize`).
+- **Plural-looking singulars.** `views`, `likes`, `votes`, `dislikes`, `news`, `series`, `species` are never lists (T8 treats the first three as counts).
+- **L-rule order.** The table order is kept: L3 (plural) is tested before L4, so `allUsers` is L3; L4 catches `list` and `all*` names that are not plural (`allData`).
+- **T-rule details.** T5 is tested before T4 so `avatarUrl` is an image URL; an image word alone only wins with a `url`/`uri`/`link`/`src` suffix (so `imageCount` is T8). T3 matches a last word of `email`/`mail`, or `address` preceded by `email`. T1: exactly `id` is the entity key, a trailing `id` (`userId`) is an integer reference. For list fields the last word is singularised before the T rules (`emails`, `tags`). `name` uses the type's persona kind: product/item/listing types get product names, org types company names, everything else a person full name (persona-coherent names arrive with M3, so M1 draws first, last, email and username independently).
+- **Datetimes (M1).** `anchorDate - int(30d..1500d)` in milliseconds (birthdays 18-80 years); coherent `createdAt <= updatedAt` ordering is M3.
+- **Result mode.** `errors: "result"` returns `{ data }` on success and `{ errors }` for GraphQL parse, validation and execution failures; other `GraceholderError`s always throw.
