@@ -234,6 +234,8 @@ export interface WorldResult {
 export interface World {
   /** Run a query or a mutation. Never throws for a bad operation: failures come back as `errors`. */
   query(query: string | DocumentNode, options?: { variables?: Record<string, unknown>; operationName?: string }): WorldResult;
+  /** The root collection of a query as a lazy iterable (see {@link stream}); reflects pins and mutations when each window is generated. */
+  stream(query: string | DocumentNode, options?: Omit<StreamOptions, keyof Options> & Pick<Options, "variables" | "operationName">): Stream;
   /** Override fields of the entity `"Type:key"`. */
   pin(ref: string, fields: Record<string, unknown>): World;
   export(): ExportedWorld;
@@ -282,3 +284,93 @@ export declare function analyzeSamples(
   samples: Data | { data: Data } | Array<Data | { data: Data }>,
   opts?: SpecFromSamplesOptions,
 ): { spec: Spec; notes: SampleNote[] };
+
+// ---- bulk generation (docs/design.md section 19) -------------------------------------------------
+
+export interface StreamOptions extends Omit<Options, "errors"> {
+  /** How many items to yield. Required unless the collection has a declared size (`@count`, or a spec `count`). */
+  count?: number;
+  /** Index of the first item (default 0): item k equals item k of `field(offset: k, first: 1)`. */
+  offset?: number;
+  /** Items generated per window (default 500, at most 10000). Never changes the output. */
+  chunkSize?: number;
+  /** Response key of the root collection to stream; default the first root list or connection. */
+  field?: string;
+}
+
+/** A lazily generated collection: a sync and an async iterable, iterable any number of times. */
+export interface Stream<T = Record<string, any>> extends Iterable<T>, AsyncIterable<T> {
+  /** Response key of the streamed root field. */
+  readonly field: string;
+  /** The items in windows of at most `chunkSize`. */
+  chunks(): Generator<T[]>;
+}
+
+/** The root collection of a query as a lazy iterable of items, with bounded memory. */
+export declare function stream<T = Record<string, any>>(query: string | DocumentNode, options?: StreamOptions): Stream<T>;
+
+/** One compact JSON document per item, each followed by a newline. A sync source gives a sync generator. */
+export declare function toNDJSON(source: Iterable<unknown>): Generator<string>;
+export declare function toNDJSON(source: AsyncIterable<unknown>): AsyncGenerator<string>;
+
+export interface CsvOptions {
+  /** One character, default `","`. */
+  delimiter?: string;
+  /** Line ending, default `"\r\n"` (RFC 4180). */
+  eol?: "\r\n" | "\n" | "\r";
+  /** Write the header line (default true). */
+  header?: boolean;
+  /** Column paths to write, in order (default: every flattened path). */
+  columns?: string[];
+  /** `"json"` (default) writes a list as one JSON cell; `"explode"` writes one row per element. */
+  lists?: "json" | "explode";
+  /** Explode only these list paths (implies exploding); other lists stay JSON. */
+  explode?: string[];
+}
+/** CSV with flattened column paths (`address.city`). */
+export declare function toCSV(source: Iterable<unknown>, options?: CsvOptions): Generator<string>;
+export declare function toCSV(source: AsyncIterable<unknown>, options?: CsvOptions): AsyncGenerator<string>;
+
+export interface SqlOptions extends StreamOptions {
+  /** Default `"postgres"`. */
+  dialect?: "postgres" | "sqlite";
+  /** Write CREATE TABLE statements (default true). */
+  ddl?: boolean;
+  /** Write DROP TABLE IF EXISTS before the CREATE statements (default false). */
+  dropExisting?: boolean;
+  /** Wrap the script in BEGIN/COMMIT (default true). */
+  transaction?: boolean;
+  /** `"snake"` (default) turns `BlogPost`/`createdAt` into `blog_post`/`created_at`; `"preserve"` keeps the names. */
+  names?: "snake" | "preserve";
+  tablePrefix?: string;
+  /** Table name per entity type, overriding `names`. */
+  tableNames?: Record<string, string>;
+  /** Write the preamble (BEGIN and DDL); default true. */
+  header?: boolean;
+  /** Write the closing COMMIT; default true. */
+  footer?: boolean;
+}
+
+export interface SqlTable {
+  type: string;
+  table: string;
+  primaryKey: string;
+  columns: Array<{ name: string; type: string; references?: string }>;
+}
+
+export interface SqlWriter {
+  dialect: "postgres" | "sqlite";
+  /** BEGIN, optional DROPs, CREATE TABLEs and foreign keys. */
+  header(): string;
+  /** INSERTs for items `[from, to)` (absolute indexes); call in order, earlier items are replayed silently. */
+  rows(from?: number, to?: number): Generator<string>;
+  /** COMMIT (empty when `transaction` is false). */
+  footer(): string;
+  /** The planned tables, in creation order. */
+  tables(): SqlTable[];
+}
+
+/** A resumable SQL writer for a query or a {@link Stream}. */
+export declare function sqlWriter(source: string | DocumentNode | Stream, options?: SqlOptions): SqlWriter;
+/** SQL (DDL, INSERTs, COMMIT) for the root collection of a query and everything under it, as statements. */
+export declare function toSQL(source: string | DocumentNode | Stream, options?: SqlOptions): Generator<string>;

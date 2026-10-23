@@ -1,7 +1,7 @@
 # API reference
 
 ```js
-import { graceholder, createWorld, inferSchema, specFromSamples, analyzeSamples, registerPack, suggestSpec, buildSuggestPrompt, GraceholderError, KEY_SCHEME } from "@johnhenry/graceholder";
+import { graceholder, stream, toNDJSON, toCSV, toSQL, sqlWriter, createWorld, inferSchema, specFromSamples, analyzeSamples, registerPack, suggestSpec, buildSuggestPrompt, GraceholderError, KEY_SCHEME } from "@johnhenry/graceholder";
 ```
 
 ## `graceholder(query, options?)`
@@ -171,6 +171,121 @@ console.log({ created: made.data.createUser.name, users: data.users.map((u) => [
     ]
   ]
 }
+```
+
+## Bulk generation: `stream`, `toNDJSON`, `toCSV`, `toSQL`
+
+For datasets (a seeded staging database, fixtures files, load tests) rather than responses. The query describes the data; the root collection is generated lazily.
+
+### `stream(query, options)`
+
+Returns a `Stream`: an iterable and an async iterable of the items of the root collection, usable any number of times. Item `k` is exactly item `k` of the windowed query `field(offset: k, first: 1)` for the same inputs. It takes every option of `graceholder` (`seed`, `spec`, `packs`, `schema`, `variables`, `locale`, `anchorDate`, `images`, `distributions`, `strict`, `operationName`) plus:
+
+| Option | Default | Meaning |
+|---|---|---|
+| `count` | declared size | How many items. Required unless the collection has a declared size (`@count`, spec `count`); a declared size also clips it. |
+| `offset` | `0` | Index of the first item. |
+| `chunkSize` | `500` | Items generated per window (1 to 10000). Never changes the output; it is the memory knob. |
+| `field` | first list or connection | Response key of the root field to stream. Other root fields are ignored. |
+
+`world.stream(query, options)` does the same against a [world](#createworldoptions): pins, creations and deletions show in the items; consume it before mutating the world. `stream.chunks()` yields arrays of at most `chunkSize` items. Paging arguments written on the root field are replaced; filter arguments are kept.
+
+```js
+import { stream, graceholder } from "@johnhenry/graceholder";
+
+const q = "{ users { id name email posts { id title } } }";
+const items = stream(q, { seed: "bulk", count: 5000 });
+let k = 0;
+let fromStream;
+for (const user of items) if (++k === 1235) fromStream = user.name;
+const windowed = graceholder("{ users(offset: 1234, first: 1) { name } }", { seed: "bulk" }).users[0].name;
+console.log({ fromStream, windowed });
+```
+
+```json
+{
+  "fromStream": "Fiona Wright",
+  "windowed": "Fiona Wright"
+}
+```
+
+A connection root (`edges { node }` or `nodes`) streams its nodes. Memory is bounded by `chunkSize`, not by `count`: 100,000 rows retain a flat 8 MB of heap in the tests.
+
+### `toNDJSON(source)`
+
+Lines of compact JSON, each ending in `"\n"`. `source` is any iterable or async iterable (a sync source gives a sync generator, an async-only source an async generator). Pipe it with `Readable.from(toNDJSON(stream(...)))`.
+
+### `toCSV(source, options?)`
+
+RFC 4180 CSV as a generator of lines.
+
+| Option | Default | Meaning |
+|---|---|---|
+| `delimiter` | `","` | One character that is not a quote or a line break. |
+| `eol` | `"\r\n"` | `"\r\n"`, `"\n"` or `"\r"`. |
+| `header` | `true` | Write the header line (use `false` for the later parts of a chunked file). |
+| `columns` | all | Column paths to write, in order. |
+| `lists` | `"json"` | `"json"`: a list is one JSON cell. `"explode"`: one row per element; several exploded lists give their cross product, and an empty list keeps the row with empty cells. |
+| `explode` | none | Explode only these list paths (`"posts"`, `"posts.tags"`); the other lists stay JSON. |
+
+Columns are flattened paths (`address.city`). A field is quoted when it contains the delimiter, a quote, CR or LF; quotes are doubled; null is an empty cell and the empty string is `""`. For a `stream` the columns come from the query, so null objects and empty lists cannot change them; for any other source they come from the first item unless `columns` is given.
+
+```js
+import { stream, toCSV } from "@johnhenry/graceholder";
+
+const q = "{ users @count(n: 3) { id name address { city } } }";
+console.log([...toCSV(stream(q, { seed: "csv" }), { eol: "\n" })].join("").split("\n").slice(0, 3));
+```
+
+```json
+[
+  "id,name,address.city",
+  "1,Tomas Saito,Centerville",
+  "2,Arjun Olsen,Riverton"
+]
+```
+
+### `toSQL(source, options?)` and `sqlWriter(source, options?)`
+
+`source` is a query or a `Stream` (including `world.stream(...)`). `toSQL` returns a generator of statements; `sqlWriter` returns `{ header(), rows(from, to), footer(), tables() }` for chunked or resumable output. Options are the stream options plus:
+
+| Option | Default | Meaning |
+|---|---|---|
+| `dialect` | `"postgres"` | `"postgres"` or `"sqlite"`. |
+| `ddl` | `true` | Write `CREATE TABLE`s (and, for Postgres, the foreign keys). |
+| `dropExisting` | `false` | Write `DROP TABLE IF EXISTS` first (`CASCADE` in Postgres): a re-runnable seed. |
+| `transaction` | `true` | Wrap in `BEGIN;` / `COMMIT;`. |
+| `names` | `"snake"` | `BlogPost` / `createdAt` become `blog_post` / `created_at`; `"preserve"` keeps them. |
+| `tablePrefix`, `tableNames` | none | Table name prefix; per-type table names. |
+| `header`, `footer` | `true` | `toSQL` only: leave out the preamble or the `COMMIT;`. |
+
+**Tables and keys.** One table per entity type, one column per scalar field. The query is widened so a type's every row has every column that is selected for the type anywhere. The primary key is the entity's key: an `INTEGER` named `id` for types in the shared numeric pool that have an `id` field (generated by `id.key`, so it equals the key), else a column `_key` (`INTEGER` for pool keys, `TEXT` for owned entities such as `3.comments.2`).
+
+**Foreign keys.** A singular object field becomes `<field>_id` in the parent; a nested list becomes `<parent>_id` in the child table. Constraints are `DEFERRABLE INITIALLY DEFERRED` (Postgres: `ALTER TABLE ... ADD CONSTRAINT` after the `CREATE`s; SQLite: inline). Referenced rows are written before the rows that reference them.
+
+**Shared references are written once.** `post.author` points into the pool of its type (default 100 entities). A pool entity is written the first time it is met and never again, tracked in a set bounded by the pool size, so a stream of any length holds at most `poolSize` keys per type. The same set removes the duplicate when a type is both a root collection and a reference. `rows(from, to)` must be called in order; starting late replays the earlier items without writing them, so an independent writer can produce rows 1000 to 1999 and the bytes still equal the single run.
+
+**Values.** `Int` `INTEGER`, `Float` `DOUBLE PRECISION` / `REAL`, `Boolean` `BOOLEAN` / `INTEGER`, `DateTime` `TIMESTAMPTZ` / `TEXT`, `Date` `DATE` / `TEXT`, everything else `TEXT`. A list of scalars is JSON in a `JSONB` / `TEXT` column. Identifiers are double-quoted (`"` doubled), strings single-quoted (`'` doubled; correct for standard-conforming strings, the default in Postgres and the only mode in SQLite). Not supported (a `bad-options` error): Relay connections and unions or interfaces.
+
+```js
+import { toSQL } from "@johnhenry/graceholder";
+
+const q = "{ posts @count(n: 2) { id title author { id name } } }";
+console.log([...toSQL(q, { seed: "sql", dialect: "sqlite", transaction: false })].join("").split("\n").slice(0, 9));
+```
+
+```json
+[
+  "-- graceholder: sqlite seed data, generated deterministically",
+  "CREATE TABLE \"post\" (",
+  "  \"id\" INTEGER PRIMARY KEY,",
+  "  \"title\" TEXT,",
+  "  \"author_id\" INTEGER REFERENCES \"author\" (\"id\") DEFERRABLE INITIALLY DEFERRED",
+  ");",
+  "CREATE TABLE \"author\" (",
+  "  \"id\" INTEGER PRIMARY KEY,",
+  "  \"name\" TEXT"
+]
 ```
 
 ## Distributions and time series

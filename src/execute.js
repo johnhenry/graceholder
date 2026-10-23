@@ -107,7 +107,7 @@ const slugify = (v) => String(v).toLowerCase().replace(/[^a-z0-9]+/g, "-").repla
 
 /**
  * @param {{ sdl: string, document: any, model: Map<string, Map<string, any>>, abstracts: Map<string, any>, opSeed?: string, schema?: import("graphql").GraphQLSchema, rootType?: string }} inferred
- * @param {{ seed: string|number, anchorMs: number, locale?: string, variables?: Record<string, unknown>, poolSize?: number, endlessTotal?: number, world?: any, images?: "url"|"svg", packs?: any[], realistic?: boolean }} opts
+ * @param {{ seed: string|number, anchorMs: number, locale?: string, variables?: Record<string, unknown>, poolSize?: number, endlessTotal?: number, world?: any, trace?: (path: any, value: any) => void, images?: "url"|"svg", packs?: any[], realistic?: boolean }} opts
  * @returns {import("graphql").ExecutionResult}
  */
 export function run(inferred, opts) {
@@ -414,13 +414,23 @@ export function run(inferred, opts) {
     return keyStream(K(value.seed ?? rootSeed, "e", abstractType.name, value.entityKey, "__typename")).pick(a.possible);
   };
 
+  // bulk SQL needs the entity key of every object in the result, which the plain data does not carry
+  const tracer = opts.trace;
+  const resolve = tracer
+    ? (source, args, ctx, info) => {
+        const out = fieldResolver(source, args, ctx, info);
+        if (out !== null && typeof out === "object") tracer(info.path, out);
+        return out;
+      }
+    : fieldResolver;
+
   /** @type {any} */
   const result = execute({
     schema,
     document: inferred.document,
     rootValue: { typeName: ROOT, entityKey: ROOT, seed: rootSeed },
     variableValues: opts.variables,
-    fieldResolver,
+    fieldResolver: resolve,
     typeResolver,
   });
   if (typeof result?.then === "function") {

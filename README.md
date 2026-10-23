@@ -339,6 +339,21 @@ console.log({ ...data.user, avatar: data.user.avatar.slice(0, 40) + "...", produ
 
 See [Packs, distributions and images](docs/api.md#packs) in the API reference and the [cookbook](docs/cookbook.md#realistic-data).
 
+## Seed a database, write fixtures files (bulk)
+
+`stream` turns the root collection of a query into a lazy iterable (sync and async) with bounded memory, and `toNDJSON`, `toCSV` and `toSQL` write it out. Item `k` of the stream is exactly item `k` of the windowed query `users(offset: k, first: 1)`, so it works with `schema`, `packs`, `spec` and a world (`world.stream`), and chunked output (rows 0 to 999, then 1000 to 1999) is byte-identical to one run.
+
+```js
+import { stream, toNDJSON, toSQL } from "@johnhenry/graceholder";
+
+// stream() is lazy: 100,000 rows cost no more memory than 2
+const query = "{ posts { id title author { id name } } }";
+console.log([...toNDJSON(stream(query, { seed: "readme", count: 2 }))]);
+console.log("run toSQL for a Postgres or SQLite script:", [...toSQL(query, { seed: "readme", count: 1, dialect: "sqlite" })].length > 0);
+```
+
+SQL gets one table per entity type, nested lists as child tables with foreign keys, shared references written once, and Postgres or SQLite quoting. See [docs/api.md](docs/api.md#bulk-generation-stream-tondjson-tocsv-tosql) and the cookbook recipe [Seed a staging Postgres identically](docs/cookbook.md#seed-a-staging-postgres-identically).
+
 ## Determinism and stability
 
 The key scheme, hash (XXH64), generator (SplitMix64), vocabulary and inference rules are frozen at 1.0.0; see [STABILITY.md](STABILITY.md). Golden files in `test/golden` pin the output, are checked on Node 22 and 24, and are reproduced in a browser-like VM and in headless Chromium.
