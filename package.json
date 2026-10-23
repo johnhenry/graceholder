@@ -17,7 +17,7 @@
     "data",
     "testing"
   ],
-  "author": "",
+  "author": "John Henry",
   "license": "MIT",
   "dependencies": {
     "@snaplet/copycat": "^0.15.1",
@@ -28,5 +28,13 @@
   },
   "engines": {
     "node": ">=14.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/johnhenry/mock-ql-sculptor.git"
+  },
+  "homepage": "https://github.com/johnhenry/mock-ql-sculptor#readme",
+  "bugs": {
+    "url": "https://github.com/johnhenry/mock-ql-sculptor/issues"
   }
 }
