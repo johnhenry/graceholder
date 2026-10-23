@@ -563,14 +563,15 @@ Scope: section 10; README, API docs, STABILITY.md, cookbook; browser build verif
 **Acceptance:** `suggestSpec` works with a stub `llm`, validates and repairs; rejects bad output; core has no LLM dependency; docs complete; 1.0.0 checklist below is satisfied.
 **Tests:** stub LLM returning valid/fenced/invalid JSON; repair round; unknown generator in suggestion rejected; prompt snapshot (non-stability-bearing); package has no LLM deps (check `dependencies`); browser smoke (bundle with esbuild, run in a headless browser) identical output to Node for goldens.
 
-**1.0.0 readiness checklist**
-- [ ] All golden files reviewed; key scheme `gh1`, hash, RNG, vocab, inference rules declared frozen
-- [ ] STABILITY.md and "what counts as an output change" published; CI enforces the `breaking` label for golden diffs
-- [ ] Output identical on Node 22, current LTS and a browser
-- [ ] Vocab provenance/licences documented; checksums asserted
-- [ ] Open questions in section 15 resolved or explicitly deferred
-- [ ] Bundle size measured and documented; zero runtime deps except `graphql`
-- [ ] Trusted publishing configured; README examples run as tests
+**1.0.0 readiness checklist** (status at the end of M5; the open items need the owner)
+- [ ] All golden files reviewed; key scheme `gh1`, hash, RNG, vocab, inference rules declared frozen (owner review before tagging 1.0.0: any golden change after that is breaking)
+- [x] STABILITY.md and "what counts as an output change" published (generated from section 11 and checked by a test); the `breaking`-label check for golden diffs exists (`golden-guard.yml`) and becomes enforcing at version 1.0.0
+- [x] Output identical on Node 22, current LTS (24) and a browser (browser-like VM in CI, headless Chromium via `npm run test:browser`)
+- [x] Vocab provenance/licences documented; checksums asserted
+- [x] Open questions in section 15 resolved or explicitly deferred
+- [x] Bundle size measured and documented (about 200 kB minified, 58 kB gzip, `graphql` included); zero runtime deps except `graphql`
+- [ ] Trusted publishing configured (owner: first publish with 2FA, then `npm trust`; see the checklist comment on the setup issue)
+- [x] README examples run as tests (`test/docs.test.js`)
 
 ## 15. Open questions (resolved)
 
@@ -639,3 +640,11 @@ Choices made while implementing, where the text above was ambiguous or needed a 
 - **`$options`.** `poolSize` (default 100) and `endlessTotal` (default 1000), positive integers.
 - **Spec validation.** Any structural problem throws `bad-spec`; `list` with `one` throws `conflicting-overrides`. A spec entry that matches no field is reported as a decision of kind `unused` (rule `unused-spec-path`, source `spec`); `strict: true` turns it into an error.
 - **`inferSchema(query, spec?, options?)`** returns the SDL, the decisions (each with `source` of directive, spec, heuristic or default, and the `rule`) and the stripped document. Decision kinds `null`, `key`, `seed` and `unused` were added.
+
+### M5
+
+- **`suggestSpec`.** `suggestSpec(query, { llm, spec? })` builds the prompt (`buildSuggestPrompt`, versioned `SUGGEST_PROMPT_VERSION`), accepts a bare JSON object, a fenced block or prose around a JSON object, and validates the result by running it through `inferSchema(query, spec)`: Spec schema (`bad-spec`), generator names and arguments, conflicts, derive cycles, and **spec paths that match no field** all count as problems. One repair round re-prompts with the problems; a second failure throws `bad-suggestion` with the problems in `hint`. An `llm` that throws is not caught. The existing spec is part of the prompt and the model is asked to return the full spec; the validated reply is returned as is.
+- **Documentation.** README, `docs/api.md`, `docs/cookbook.md`; their `js` examples run in `test/docs.test.js` and each `json` block directly after one is compared with the example's single `console.log` (refresh with `npm run docs:update`). `STABILITY.md` is generated from section 11 (`npm run stability`) and shipped.
+- **Browser verification.** `test/bundle.test.js` bundles `src/index.js` with esbuild for the browser and reproduces every golden in a `vm` context that has no `process`, `require` or `Buffer` (runs in CI). `test/browser.test.js` does the same in headless Chromium through `playwright-core` when a Chromium is installed (`npm run test:browser` makes a missing browser a failure).
+- **Golden guard.** `.github/workflows/golden-guard.yml` runs `scripts/check-golden-change.mjs`: from version 1.0.0 a PR that changes `test/golden` needs the `breaking` label (single-package repo, so the label stands in for the "major changeset"); before 1.0.0 it only reports.
+- **Package contents** are tested (`npm pack` ships `src/`, `README.md`, `LICENSE`, `STABILITY.md`, `package.json`).

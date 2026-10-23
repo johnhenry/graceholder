@@ -7,6 +7,7 @@ import { LOCALES } from "./vocab/en.js";
 import { KEY_SCHEME } from "./key.js";
 
 export { GraceholderError, KEY_SCHEME };
+export { suggestSpec, buildSuggestPrompt, SUGGEST_PROMPT_VERSION } from "./suggest.js";
 
 const DEFAULT_SEED = "graceholder";
 const DEFAULT_ANCHOR = "2025-01-01T00:00:00.000Z";

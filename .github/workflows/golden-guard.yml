@@ -1,0 +1,26 @@
+name: Golden guard
+
+# A changed golden file is an output change (docs/design.md section 11). From 1.0.0 on such a PR
+# must carry the `breaking` label. Before 1.0.0 the check only reports.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+jobs:
+  golden:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Check golden changes against the labels
+        run: node scripts/check-golden-change.mjs
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
