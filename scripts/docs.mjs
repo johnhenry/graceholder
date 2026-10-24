@@ -2,7 +2,6 @@
 // block must console.log exactly one value equal to that JSON; `node scripts/docs.mjs --write`
 // rewrites the JSON blocks from the real output. test/docs.test.js runs this in check mode.
 import { readFileSync, writeFileSync, mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL, fileURLToPath } from "node:url";
 import { isDeepStrictEqual } from "node:util";
@@ -28,6 +27,7 @@ async function runBlock(code, dir, n) {
   writeFileSync(
     file,
     code
+      .replace(/@johnhenry\/graceholder\/(apollo|urql|fetch)\b/g, (_, name) => pathToFileURL(join(ROOT, "src", "adapters", `${name}.js`)).href)
       .replace(/@johnhenry\/graceholder\/packs\/(\w+)/g, (_, name) => `${PACKS}/${name}.js`)
       .replace(/@johnhenry\/graceholder\/packs(?=["'])/g, `${PACKS}/index.js`)
       .replaceAll("@johnhenry/graceholder", SRC),
@@ -46,7 +46,7 @@ async function runBlock(code, dir, n) {
 /** @returns {Promise<{ file: string, line: number, message: string }[]>} problems (empty when all pass) */
 export async function checkDocs({ write = false } = {}) {
   const problems = [];
-  const dir = mkdtempSync(join(tmpdir(), "gh-docs-"));
+  const dir = mkdtempSync(join(ROOT, "node_modules", ".gh-docs-")); // inside the repo so optional peers (@apollo/client, ...) resolve;
   let n = 0;
   try {
     for (const rel of DOC_FILES) {

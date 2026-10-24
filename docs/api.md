@@ -505,6 +505,78 @@ console.log({ spec, status: withValues["orders.status"], sample: graceholder(que
 
 An authoring-time helper. `llm` is `(prompt: string) => Promise<string>`. It builds a prompt (`buildSuggestPrompt(query, spec?)`) with the query, the inferred SDL and decisions, the spec grammar and the generator names, parses the reply (a bare JSON object, a fenced block or prose around a JSON object), and validates it: Spec schema, generator names, path syntax, conflicts, and paths that match no field. Pass the `packs`, `distributions` and `images` you generate with so the prompt lists the pack generators and the validation accepts them. On failure it re-prompts once with the problems; then it throws `bad-suggestion` (`hint` lists the problems). The prompt wording is versioned (`SUGGEST_PROMPT_VERSION`) and is not part of the output-stability guarantee. `suggestSpec` is never called by generation.
 
+## Client adapters
+
+Three subpath exports answer a GraphQL client's requests from a world (`createWorld`). Each takes the same options:
+
+| Option | Meaning |
+| --- | --- |
+| `world` | A ready world. Mutations persist in it, so several adapters can share one. |
+| `seed`, `spec`, `anchorDate`, `locale`, `strict`, `log` | World options; used (and passed through unchanged, including `schema`) to create a world when `world` is not given. Reach it as `link.world` / `fetch.world`. |
+| `latency` | Simulated delay in ms: a number, `[min, max]` or `{ min, max }`. A range is drawn from the seed and the request (operation name, query text, variables), so one request always waits the same time. Default none. |
+| `delay` | `(ms) => void \| Promise<void>` replaces the `setTimeout` wait. Inject one in tests instead of real timers. |
+
+Results are plain GraphQL results (`data` and/or `errors`, graceholder codes in `errors[i].extensions.code`). The limits of worlds apply: no schema means mutation arguments are not type-checked, owned nested entities cannot be mutation targets without `shared: true`, and an `allUsers`-style field infers the type `AllUser` unless the spec says otherwise (see [createWorld](#createworldoptions)).
+
+Clients that add `__typename` to every selection (Apollo's `InMemoryCache`, urql's `cacheExchange`) get it answered like any field, so their results are the plain result plus `__typename`.
+
+### `@johnhenry/graceholder/apollo`
+
+`new GraceholderLink(options)` extends `ApolloLink`. It terminates the chain: use it where `HttpLink` would go, last in the `ApolloLink.from([...])` list. The operation's `DocumentNode` goes to the world as it is (no printing); `variables` and `operationName` are passed along. The reply is an Observable, so the link works with the whole link pipeline; unsubscribing cancels a pending delayed answer. Tested with `@apollo/client` 4 (it uses only `ApolloLink` and `Observable`, which 3.x exports too).
+
+### `@johnhenry/graceholder/urql`
+
+`graceholderExchange(options)` answers `query` and `mutation` operations and passes everything else (subscriptions, teardowns) to `forward`. It replaces `fetchExchange`:
+
+```text
+exchanges: [cacheExchange, graceholderExchange({ seed: "app" })]   // no fetchExchange
+```
+
+Put it after `cacheExchange` (so cached results stay cached) and after anything that decorates operations (`mapExchange`, `authExchange`). If you keep `fetchExchange` after it for other traffic, it never sees queries or mutations, since this exchange consumes them. A teardown for an operation cancels its pending delayed answer.
+
+### `@johnhenry/graceholder/fetch`
+
+`createFetch({ world | ...worldOptions, match, latency, delay, fallback })` returns a function with the `fetch` signature (plus a `.world` property).
+
+- `match` decides which requests the world answers: default, URL paths ending in `/graphql` (a trailing slash is fine); a string (exact path or URL), a `RegExp` (tested on the full URL) or `(url, { method }) => boolean`. Relative URLs resolve against the page's origin, or `http://localhost` outside a browser.
+- `POST` with a JSON body `{ query, variables, operationName }` (or `application/graphql` text), and `GET` with `query`, `variables` (JSON) and `operationName` in the URL. A mutation over `GET` is refused with 405.
+- A JSON array is a batch and gets an array of results.
+- It returns a real `Response`: status 200 for every GraphQL result, including `errors`; 400 for requests that are not GraphQL requests (invalid JSON, no `query`, bad `variables`, an empty batch); 405 for other methods.
+- Anything that does not match goes to `fallback`, or `globalThis.fetch`.
+- `signal` is honoured while a delay is pending.
+
+```js
+import { createFetch } from "@johnhenry/graceholder/fetch";
+
+const gfetch = createFetch({ seed: "api", spec: { users: { count: 2 } } });
+const res = await gfetch("https://example.test/graphql", {
+  method: "POST",
+  headers: { "content-type": "application/json" },
+  body: JSON.stringify({ query: "{ users { id name } }" }),
+});
+console.log({ status: res.status, body: await res.json() });
+```
+
+```json
+{
+  "status": 200,
+  "body": {
+    "data": {
+      "users": [
+        {
+          "id": "1",
+          "name": "Camila Zhang"
+        },
+        {
+          "id": "2",
+          "name": "Tessa Marsh"
+        }
+      ]
+    }
+  }
+}
+```
+
 ## Errors
 
 `GraceholderError` has `code`, optional `path` and `hint`, and for GraphQL problems `cause` and `errors`.

@@ -39,6 +39,18 @@
       "types": "./src/packs/health.d.ts",
       "default": "./src/packs/health.js"
     },
+    "./apollo": {
+      "types": "./src/adapters/apollo.d.ts",
+      "default": "./src/adapters/apollo.js"
+    },
+    "./urql": {
+      "types": "./src/adapters/urql.d.ts",
+      "default": "./src/adapters/urql.js"
+    },
+    "./fetch": {
+      "types": "./src/adapters/fetch.d.ts",
+      "default": "./src/adapters/fetch.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -69,10 +81,14 @@
     "graphql": "^16.0.0"
   },
   "devDependencies": {
+    "@apollo/client": "^4.3.5",
     "@types/node": "^22.0.0",
+    "@urql/core": "^6.0.3",
     "esbuild": "^0.28.2",
     "playwright-core": "^1.64.1",
-    "typescript": "^5.6.0"
+    "rxjs": "^7.8.2",
+    "typescript": "^5.6.0",
+    "wonka": "^6.3.6"
   },
   "repository": {
     "type": "git",
@@ -81,5 +97,21 @@
   "homepage": "https://github.com/johnhenry/graceholder#readme",
   "bugs": {
     "url": "https://github.com/johnhenry/graceholder/issues"
+  },
+  "peerDependencies": {
+    "@apollo/client": ">=3.8.0 <5",
+    "@urql/core": ">=5.0.0 <7",
+    "wonka": "^6.3.0"
+  },
+  "peerDependenciesMeta": {
+    "@apollo/client": {
+      "optional": true
+    },
+    "@urql/core": {
+      "optional": true
+    },
+    "wonka": {
+      "optional": true
+    }
   }
 }

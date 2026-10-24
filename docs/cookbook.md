@@ -390,6 +390,105 @@ console.log({ spec, statuses: [...new Set(out.tickets.map((t) => t.status))].sor
 }
 ```
 
+## Storybook with Apollo
+
+A decorator that gives every story an `ApolloProvider` backed by a world. Fix the seed and the stories show the same data on every machine and every run; pass a different spec per story with `parameters`.
+
+```jsx
+// .storybook/preview.jsx
+import { ApolloClient, InMemoryCache } from "@apollo/client";
+import { ApolloProvider } from "@apollo/client/react";
+import { GraceholderLink } from "@johnhenry/graceholder/apollo";
+
+export const decorators = [
+  (Story, { parameters }) => {
+    const client = new ApolloClient({
+      cache: new InMemoryCache(),
+      link: new GraceholderLink({ seed: "storybook", ...parameters.graceholder }),
+    });
+    return (
+      <ApolloProvider client={client}>
+        <Story />
+      </ApolloProvider>
+    );
+  },
+];
+```
+
+Stories then set `parameters: { graceholder: { spec: { users: { count: 0 } } } }` for an empty state, or `{ latency: 1500 }` for a loading state that lasts the same time on every run. The client that decorator builds is an ordinary Apollo client; this runs the same thing without React:
+
+```js
+import { ApolloClient, InMemoryCache, gql } from "@apollo/client";
+import { GraceholderLink } from "@johnhenry/graceholder/apollo";
+
+const clientFor = (parameters) => new ApolloClient({ cache: new InMemoryCache(), link: new GraceholderLink({ seed: "storybook", ...parameters.graceholder }) });
+const count = async (client) => (await client.query({ query: gql`{ users { id } }` })).data.users.length;
+
+console.log({
+  default: await count(clientFor({ graceholder: { spec: { users: { count: 4 } } } })),
+  emptyState: await count(clientFor({ graceholder: { spec: { users: { count: 0 } } } })),
+});
+```
+
+```json
+{
+  "default": 4,
+  "emptyState": 0
+}
+```
+
+For a urql app, give the story's `Provider` a client with `exchanges: [cacheExchange, graceholderExchange({ seed: "storybook" })]`.
+
+## Playwright end-to-end tests
+
+Two ways to run an app against a world with no backend. Both use the same seed, so the data in the test is the data the app shows.
+
+**Route interception.** Answer the app's `/graphql` requests from the test with `createFetch`. The handler is a thin translation between Playwright's route and a `Response`:
+
+```js
+import { createFetch } from "@johnhenry/graceholder/fetch";
+
+const gfetch = createFetch({ seed: "e2e", spec: { todos: { count: 3 } } });
+
+// in a test:  await page.route("**/graphql", (route) => answer(route));
+async function answer(route) {
+  const request = route.request();
+  const res = await gfetch(request.url(), { method: request.method(), headers: request.headers(), body: request.postData() });
+  await route.fulfill({ status: res.status, headers: Object.fromEntries(res.headers), body: await res.text() });
+}
+
+// a stand-in for Playwright's route, so this example runs
+const fulfilled = [];
+await answer({
+  request: () => ({ url: () => "http://app.test/graphql", method: () => "POST", headers: () => ({ "content-type": "application/json" }), postData: () => JSON.stringify({ query: "{ todos { id title } }" }) }),
+  fulfill: async (r) => fulfilled.push({ status: r.status, todos: JSON.parse(r.body).data.todos.length }),
+});
+console.log(fulfilled);
+```
+
+```json
+[
+  {
+    "status": 200,
+    "todos": 3
+  }
+]
+```
+
+Because the world lives in the test process, the test can pin or mutate it directly (`gfetch.world.pin("Todo:1", { title: "Buy milk" })`) and the next request from the app sees it.
+
+**In the app's test entry.** If the app can be built with a test entry point, install the fake `fetch` there and no interception is needed. The same app code then runs in Storybook, Playwright and a demo build:
+
+```jsx
+// src/main.test-entry.js
+import { createFetch } from "@johnhenry/graceholder/fetch";
+
+globalThis.fetch = createFetch({ seed: "e2e", spec: { todos: { count: 3 } }, fallback: globalThis.fetch.bind(globalThis) });
+await import("./main.js");
+```
+
+Non-GraphQL requests (images, REST calls) fall through to the real `fetch`.
+
 ## Using suggestSpec with a real model
 
 `suggestSpec` takes any async function. With a fetch-based client it looks like this (not run here because it needs a network):
