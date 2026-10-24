@@ -1,0 +1,95 @@
+{
+  "path": "users.0.status",
+  "value": "ACTIVE",
+  "kind": "scalar",
+  "field": {
+    "name": "status",
+    "parentType": "User",
+    "path": "users.status",
+    "type": "Status",
+    "list": false,
+    "nullable": false
+  },
+  "entity": {
+    "identity": "User:1",
+    "type": "User",
+    "key": "1",
+    "shared": true,
+    "how": [
+      {
+        "path": "users",
+        "field": "users",
+        "via": "list",
+        "index": 0,
+        "key": "1",
+        "shared": true,
+        "size": 4,
+        "window": {
+          "start": 1,
+          "total": 4,
+          "endless": false
+        },
+        "countKey": "gh1\u001fs\u001fl\u001fQuery\u001fQuery\u001fusers"
+      }
+    ]
+  },
+  "key": {
+    "string": "gh1\u001fs\u001fe\u001fUser\u001f1\u001fstatus",
+    "parts": [
+      "gh1",
+      "s",
+      "e",
+      "User",
+      "1",
+      "status"
+    ],
+    "hash": "0x7a5b38ec82729c0f"
+  },
+  "generator": {
+    "name": "oneOf",
+    "args": {
+      "values": [
+        "ACTIVE",
+        "DISABLED"
+      ]
+    },
+    "outputType": "Status"
+  },
+  "seed": {
+    "value": "s",
+    "source": "option"
+  },
+  "rule": {
+    "id": "schema-enum",
+    "source": "schema",
+    "description": "an enum of the schema: one of its values"
+  },
+  "listRule": {
+    "id": "schema",
+    "source": "schema",
+    "description": "taken from the schema",
+    "isList": false
+  },
+  "decisions": [
+    {
+      "kind": "list",
+      "value": false,
+      "source": "schema",
+      "rule": "schema"
+    },
+    {
+      "kind": "nullable",
+      "value": false,
+      "source": "schema",
+      "rule": "schema"
+    },
+    {
+      "kind": "scalar",
+      "value": "Status",
+      "source": "schema",
+      "rule": "schema-enum"
+    }
+  ],
+  "precedence": [],
+  "summary": "users.0.status = \"ACTIVE\": oneOf({\"values\":[\"ACTIVE\",\"DISABLED\"]}), chosen by rule schema-enum (schema), on entity User:1 (shared)."
+}

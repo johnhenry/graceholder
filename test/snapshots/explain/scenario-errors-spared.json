@@ -1,0 +1,131 @@
+{
+  "path": "users.1.age",
+  "value": 73,
+  "kind": "scalar",
+  "field": {
+    "name": "age",
+    "parentType": "User",
+    "path": "users.age",
+    "type": "Int",
+    "list": false,
+    "nullable": true
+  },
+  "entity": {
+    "identity": "User:2",
+    "type": "User",
+    "key": "2",
+    "shared": true,
+    "how": [
+      {
+        "path": "users",
+        "field": "users",
+        "via": "list",
+        "index": 1,
+        "key": "2",
+        "shared": true,
+        "size": 3,
+        "window": {
+          "start": 1,
+          "total": null,
+          "endless": true
+        },
+        "countKey": "gh1\u001fb\u001fl\u001fQuery\u001fQuery\u001fusers"
+      }
+    ]
+  },
+  "key": {
+    "string": "gh1\u001fb\u001fe\u001fUser\u001f2\u001fage",
+    "parts": [
+      "gh1",
+      "b",
+      "e",
+      "User",
+      "2",
+      "age"
+    ],
+    "hash": "0x6b256a017058c8b6"
+  },
+  "generator": {
+    "name": "person.age",
+    "args": {
+      "min": 18,
+      "max": 90
+    },
+    "outputType": "Int"
+  },
+  "persona": {
+    "type": "User",
+    "key": "2",
+    "slots": [
+      {
+        "name": "age",
+        "key": "gh1\u001fb\u001fp\u001fUser\u001f2\u001fage"
+      }
+    ]
+  },
+  "seed": {
+    "value": "b",
+    "source": "option"
+  },
+  "rule": {
+    "id": "T8",
+    "source": "heuristic",
+    "description": "integer-like name (count, age, quantity, views...)"
+  },
+  "listRule": {
+    "id": "L6",
+    "source": "default",
+    "description": "no list rule matched: a single value",
+    "isList": false
+  },
+  "decisions": [
+    {
+      "kind": "list",
+      "value": false,
+      "source": "default",
+      "rule": "L6"
+    },
+    {
+      "kind": "scalar",
+      "value": "Int",
+      "source": "heuristic",
+      "rule": "T8"
+    }
+  ],
+  "precedence": [
+    {
+      "property": "gen",
+      "winner": "heuristic",
+      "candidates": [
+        {
+          "source": "heuristic",
+          "rule": "T8",
+          "value": "person.age",
+          "description": "integer-like name (count, age, quantity, views...)",
+          "wins": true
+        }
+      ]
+    },
+    {
+      "property": "list",
+      "winner": "heuristic",
+      "candidates": [
+        {
+          "source": "heuristic",
+          "rule": "L6",
+          "value": false,
+          "description": "no list rule matched: a single value",
+          "wins": true
+        }
+      ]
+    }
+  ],
+  "scenario": {
+    "names": [
+      "errors"
+    ],
+    "source": "option",
+    "effect": "the field is spared: draw 0.6140222908390507 >= errorRate 0.3"
+  },
+  "summary": "users.1.age = 73: person.age({\"min\":18,\"max\":90}), chosen by rule T8 (heuristic), on entity User:2 (shared)."
+}

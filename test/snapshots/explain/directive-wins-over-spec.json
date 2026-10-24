@@ -1,0 +1,151 @@
+{
+  "path": "user.nick",
+  "value": "lucas.ziegler",
+  "kind": "scalar",
+  "field": {
+    "name": "nick",
+    "parentType": "User",
+    "path": "user.nick",
+    "type": "String",
+    "list": false,
+    "nullable": false
+  },
+  "entity": {
+    "identity": "User:1",
+    "type": "User",
+    "key": "1",
+    "shared": true,
+    "how": [
+      {
+        "path": "user",
+        "field": "user",
+        "via": "entity",
+        "mode": "root",
+        "key": "1",
+        "shared": true,
+        "note": "a root field is entity 1"
+      }
+    ]
+  },
+  "key": {
+    "string": "gh1\u001fs\u001fe\u001fUser\u001f1\u001fnick",
+    "parts": [
+      "gh1",
+      "s",
+      "e",
+      "User",
+      "1",
+      "nick"
+    ],
+    "hash": "0xd7ddaef00c4671a5"
+  },
+  "generator": {
+    "name": "person.username",
+    "args": {},
+    "outputType": "String"
+  },
+  "persona": {
+    "type": "User",
+    "key": "1",
+    "slots": [
+      {
+        "name": "first",
+        "key": "gh1\u001fs\u001fp\u001fUser\u001f1\u001ffirst"
+      },
+      {
+        "name": "last",
+        "key": "gh1\u001fs\u001fp\u001fUser\u001f1\u001flast"
+      },
+      {
+        "name": "userStyle",
+        "key": "gh1\u001fs\u001fp\u001fUser\u001f1\u001fuserStyle"
+      }
+    ]
+  },
+  "seed": {
+    "value": "s",
+    "source": "option"
+  },
+  "rule": {
+    "id": "gen",
+    "source": "directive",
+    "description": "generator given by @gen, @pattern, @pick or a spec entry"
+  },
+  "listRule": {
+    "id": "L6",
+    "source": "default",
+    "description": "no list rule matched: a single value",
+    "isList": false
+  },
+  "decisions": [
+    {
+      "kind": "list",
+      "value": false,
+      "source": "default",
+      "rule": "L6"
+    },
+    {
+      "kind": "scalar",
+      "value": "String",
+      "source": "directive",
+      "rule": "gen"
+    }
+  ],
+  "precedence": [
+    {
+      "property": "gen",
+      "winner": "directive",
+      "candidates": [
+        {
+          "source": "directive",
+          "value": {
+            "name": "person.username",
+            "args": {}
+          },
+          "wins": true
+        },
+        {
+          "source": "spec",
+          "entry": "user.nick",
+          "matches": "exact",
+          "value": {
+            "name": "word",
+            "args": {}
+          },
+          "wins": false
+        },
+        {
+          "source": "spec",
+          "entry": "**.nick",
+          "matches": "**",
+          "value": {
+            "name": "color",
+            "args": {}
+          },
+          "wins": false
+        },
+        {
+          "source": "heuristic",
+          "rule": "T13",
+          "value": "words",
+          "description": "no name rule matched: two words",
+          "wins": false
+        }
+      ]
+    },
+    {
+      "property": "list",
+      "winner": "heuristic",
+      "candidates": [
+        {
+          "source": "heuristic",
+          "rule": "L6",
+          "value": false,
+          "description": "no list rule matched: a single value",
+          "wins": true
+        }
+      ]
+    }
+  ],
+  "summary": "user.nick = \"lucas.ziegler\": person.username(), chosen by rule gen (directive), on entity User:1 (shared)."
+}

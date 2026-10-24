@@ -1,0 +1,109 @@
+{
+  "path": "video.followers",
+  "value": 2,
+  "kind": "scalar",
+  "field": {
+    "name": "followers",
+    "parentType": "Video",
+    "path": "video.followers",
+    "type": "Int",
+    "list": false,
+    "nullable": false
+  },
+  "entity": {
+    "identity": "Video:1",
+    "type": "Video",
+    "key": "1",
+    "shared": true,
+    "how": [
+      {
+        "path": "video",
+        "field": "video",
+        "via": "entity",
+        "mode": "root",
+        "key": "1",
+        "shared": true,
+        "note": "a root field is entity 1"
+      }
+    ]
+  },
+  "key": {
+    "string": "gh1\u001fs\u001fe\u001fVideo\u001f1\u001ffollowers",
+    "parts": [
+      "gh1",
+      "s",
+      "e",
+      "Video",
+      "1",
+      "followers"
+    ],
+    "hash": "0xd1e2852d2a5f4167"
+  },
+  "generator": {
+    "name": "int",
+    "args": {
+      "min": 0,
+      "max": 1000000,
+      "dist": "powerlaw"
+    },
+    "outputType": "Int"
+  },
+  "seed": {
+    "value": "s",
+    "source": "option"
+  },
+  "rule": {
+    "id": "T8",
+    "source": "heuristic",
+    "description": "integer-like name (count, age, quantity, views...)"
+  },
+  "listRule": {
+    "id": "L6",
+    "source": "default",
+    "description": "no list rule matched: a single value",
+    "isList": false
+  },
+  "decisions": [
+    {
+      "kind": "list",
+      "value": false,
+      "source": "default",
+      "rule": "L6"
+    },
+    {
+      "kind": "scalar",
+      "value": "Int",
+      "source": "heuristic",
+      "rule": "T8"
+    }
+  ],
+  "precedence": [
+    {
+      "property": "gen",
+      "winner": "heuristic",
+      "candidates": [
+        {
+          "source": "heuristic",
+          "rule": "T8",
+          "value": "int",
+          "description": "integer-like name (count, age, quantity, views...)",
+          "wins": true
+        }
+      ]
+    },
+    {
+      "property": "list",
+      "winner": "heuristic",
+      "candidates": [
+        {
+          "source": "heuristic",
+          "rule": "L6",
+          "value": false,
+          "description": "no list rule matched: a single value",
+          "wins": true
+        }
+      ]
+    }
+  ],
+  "summary": "video.followers = 2: int({\"min\":0,\"max\":1000000,\"dist\":\"powerlaw\"}), chosen by rule T8 (heuristic), on entity Video:1 (shared)."
+}

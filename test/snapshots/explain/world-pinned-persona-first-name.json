@@ -1,0 +1,124 @@
+{
+  "path": "users.1.lastName",
+  "value": "Dalton",
+  "kind": "scalar",
+  "field": {
+    "name": "lastName",
+    "parentType": "User",
+    "path": "users.lastName",
+    "type": "String",
+    "list": false,
+    "nullable": false
+  },
+  "entity": {
+    "identity": "User:2",
+    "type": "User",
+    "key": "2",
+    "shared": true,
+    "how": [
+      {
+        "path": "users",
+        "field": "users",
+        "via": "list",
+        "index": 1,
+        "key": "2",
+        "shared": true,
+        "size": 3,
+        "window": {
+          "start": 1,
+          "total": null,
+          "endless": true
+        },
+        "countKey": "gh1\u001fw\u001fl\u001fQuery\u001fQuery\u001fusers"
+      }
+    ]
+  },
+  "key": {
+    "string": "gh1\u001fw\u001fe\u001fUser\u001f2\u001flastName",
+    "parts": [
+      "gh1",
+      "w",
+      "e",
+      "User",
+      "2",
+      "lastName"
+    ],
+    "hash": "0xf2e6478e7938fb85"
+  },
+  "generator": {
+    "name": "person.last",
+    "args": {},
+    "outputType": "String"
+  },
+  "persona": {
+    "type": "User",
+    "key": "2",
+    "slots": [
+      {
+        "name": "last",
+        "key": "gh1\u001fw\u001fp\u001fUser\u001f2\u001flast"
+      }
+    ],
+    "pinned": {
+      "first": "Zed"
+    }
+  },
+  "seed": {
+    "value": "w",
+    "source": "option"
+  },
+  "rule": {
+    "id": "T11",
+    "source": "heuristic",
+    "description": "a named string kind (name, city, status, bio, slug...)"
+  },
+  "listRule": {
+    "id": "L6",
+    "source": "default",
+    "description": "no list rule matched: a single value",
+    "isList": false
+  },
+  "decisions": [
+    {
+      "kind": "list",
+      "value": false,
+      "source": "default",
+      "rule": "L6"
+    },
+    {
+      "kind": "scalar",
+      "value": "String",
+      "source": "heuristic",
+      "rule": "T11"
+    }
+  ],
+  "precedence": [
+    {
+      "property": "gen",
+      "winner": "heuristic",
+      "candidates": [
+        {
+          "source": "heuristic",
+          "rule": "T11",
+          "value": "person.last",
+          "description": "a named string kind (name, city, status, bio, slug...)",
+          "wins": true
+        }
+      ]
+    },
+    {
+      "property": "list",
+      "winner": "heuristic",
+      "candidates": [
+        {
+          "source": "heuristic",
+          "rule": "L6",
+          "value": false,
+          "description": "no list rule matched: a single value",
+          "wins": true
+        }
+      ]
+    }
+  ],
+  "summary": "users.1.lastName = \"Dalton\": person.last(), chosen by rule T11 (heuristic), on entity User:2 (shared); persona pinned: first=Zed, last=undefined."
+}

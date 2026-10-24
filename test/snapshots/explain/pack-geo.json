@@ -1,0 +1,120 @@
+{
+  "path": "place.lon",
+  "value": -1.9393,
+  "kind": "scalar",
+  "field": {
+    "name": "lon",
+    "parentType": "Place",
+    "path": "place.lon",
+    "type": "Float",
+    "list": false,
+    "nullable": false
+  },
+  "entity": {
+    "identity": "Place:1",
+    "type": "Place",
+    "key": "1",
+    "shared": true,
+    "how": [
+      {
+        "path": "place",
+        "field": "place",
+        "via": "entity",
+        "mode": "root",
+        "key": "1",
+        "shared": true,
+        "note": "a root field is entity 1"
+      }
+    ]
+  },
+  "key": {
+    "string": "gh1\u001fs\u001fe\u001fPlace\u001f1\u001flon",
+    "parts": [
+      "gh1",
+      "s",
+      "e",
+      "Place",
+      "1",
+      "lon"
+    ],
+    "hash": "0x319803740a3350b5"
+  },
+  "generator": {
+    "name": "place.lng",
+    "args": {},
+    "outputType": "Float"
+  },
+  "persona": {
+    "type": "Place",
+    "key": "1",
+    "slots": [
+      {
+        "name": "place",
+        "key": "gh1\u001fs\u001fp\u001fPlace\u001f1\u001fplace"
+      },
+      {
+        "name": "lngJitter",
+        "key": "gh1\u001fs\u001fp\u001fPlace\u001f1\u001flngJitter"
+      }
+    ]
+  },
+  "seed": {
+    "value": "s",
+    "source": "option"
+  },
+  "rule": {
+    "id": "P1",
+    "source": "heuristic",
+    "description": "a vocabulary pack recognised the name",
+    "pack": "geo"
+  },
+  "listRule": {
+    "id": "L6",
+    "source": "default",
+    "description": "no list rule matched: a single value",
+    "isList": false
+  },
+  "decisions": [
+    {
+      "kind": "list",
+      "value": false,
+      "source": "default",
+      "rule": "L6"
+    },
+    {
+      "kind": "scalar",
+      "value": "Float",
+      "source": "heuristic",
+      "rule": "P1"
+    }
+  ],
+  "precedence": [
+    {
+      "property": "gen",
+      "winner": "heuristic",
+      "candidates": [
+        {
+          "source": "heuristic",
+          "rule": "P1",
+          "value": "place.lng",
+          "description": "a vocabulary pack recognised the name",
+          "wins": true
+        }
+      ]
+    },
+    {
+      "property": "list",
+      "winner": "heuristic",
+      "candidates": [
+        {
+          "source": "heuristic",
+          "rule": "L6",
+          "value": false,
+          "description": "no list rule matched: a single value",
+          "wins": true
+        }
+      ]
+    }
+  ],
+  "summary": "place.lon = -1.9393: place.lng(), chosen by rule P1 (heuristic, pack geo), on entity Place:1 (shared)."
+}

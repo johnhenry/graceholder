@@ -1,0 +1,133 @@
+{
+  "path": "users.3.email",
+  "value": "asa.xu@example.org",
+  "kind": "scalar",
+  "field": {
+    "name": "email",
+    "parentType": "User",
+    "path": "users.email",
+    "type": "String",
+    "list": false,
+    "nullable": false
+  },
+  "entity": {
+    "identity": "User:4",
+    "type": "User",
+    "key": "4",
+    "shared": true,
+    "how": [
+      {
+        "path": "users",
+        "field": "users",
+        "via": "list",
+        "index": 3,
+        "key": "4",
+        "shared": true,
+        "size": 5,
+        "window": {
+          "start": 1,
+          "total": null,
+          "endless": true
+        },
+        "countKey": "gh1\u001fs\u001fl\u001fQuery\u001fQuery\u001fusers"
+      }
+    ]
+  },
+  "key": {
+    "string": "gh1\u001fs\u001fe\u001fUser\u001f4\u001femail",
+    "parts": [
+      "gh1",
+      "s",
+      "e",
+      "User",
+      "4",
+      "email"
+    ],
+    "hash": "0x2f4b89c461ec8252"
+  },
+  "generator": {
+    "name": "person.email",
+    "args": {},
+    "outputType": "String"
+  },
+  "persona": {
+    "type": "User",
+    "key": "4",
+    "slots": [
+      {
+        "name": "first",
+        "key": "gh1\u001fs\u001fp\u001fUser\u001f4\u001ffirst"
+      },
+      {
+        "name": "last",
+        "key": "gh1\u001fs\u001fp\u001fUser\u001f4\u001flast"
+      },
+      {
+        "name": "emailStyle",
+        "key": "gh1\u001fs\u001fp\u001fUser\u001f4\u001femailStyle"
+      },
+      {
+        "name": "domain",
+        "key": "gh1\u001fs\u001fp\u001fUser\u001f4\u001fdomain"
+      }
+    ]
+  },
+  "seed": {
+    "value": "s",
+    "source": "option"
+  },
+  "rule": {
+    "id": "T3",
+    "source": "heuristic",
+    "description": "email-like name: person.email"
+  },
+  "listRule": {
+    "id": "L6",
+    "source": "default",
+    "description": "no list rule matched: a single value",
+    "isList": false
+  },
+  "decisions": [
+    {
+      "kind": "list",
+      "value": false,
+      "source": "default",
+      "rule": "L6"
+    },
+    {
+      "kind": "scalar",
+      "value": "String",
+      "source": "heuristic",
+      "rule": "T3"
+    }
+  ],
+  "precedence": [
+    {
+      "property": "gen",
+      "winner": "heuristic",
+      "candidates": [
+        {
+          "source": "heuristic",
+          "rule": "T3",
+          "value": "person.email",
+          "description": "email-like name: person.email",
+          "wins": true
+        }
+      ]
+    },
+    {
+      "property": "list",
+      "winner": "heuristic",
+      "candidates": [
+        {
+          "source": "heuristic",
+          "rule": "L6",
+          "value": false,
+          "description": "no list rule matched: a single value",
+          "wins": true
+        }
+      ]
+    }
+  ],
+  "summary": "users.3.email = \"asa.xu@example.org\": person.email(), chosen by rule T3 (heuristic), on entity User:4 (shared)."
+}

@@ -1,0 +1,14 @@
+{
+  "path": "users.0.name",
+  "kind": "unavailable",
+  "blockedAt": "users",
+  "because": "the field failed (The request timed out): the errors scenario drew 0.19349241528398187 < errorRate 0.9",
+  "by": {
+    "scenario": "errors",
+    "message": "The request timed out",
+    "draw": 0.19349241528398187,
+    "rate": 0.9,
+    "key": "gh1\u001fq\u001fe\u001fQuery\u001fQuery\u001fusers\u001f~scenario\u001ferror"
+  },
+  "summary": "users.0.name does not exist: users is null because the field failed (The request timed out): the errors scenario drew 0.19349241528398187 < errorRate 0.9."
+}

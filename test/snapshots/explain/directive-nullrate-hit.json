@@ -1,0 +1,117 @@
+{
+  "path": "users.2.city",
+  "value": null,
+  "kind": "scalar",
+  "field": {
+    "name": "city",
+    "parentType": "User",
+    "path": "users.city",
+    "type": "String",
+    "list": false,
+    "nullable": true
+  },
+  "entity": {
+    "identity": "User:3",
+    "type": "User",
+    "key": "3",
+    "shared": true,
+    "how": [
+      {
+        "path": "users",
+        "field": "users",
+        "via": "list",
+        "index": 2,
+        "key": "3",
+        "shared": true,
+        "size": 6,
+        "window": {
+          "start": 1,
+          "total": null,
+          "endless": true
+        },
+        "countKey": "gh1\u001fs\u001fl\u001fQuery\u001fQuery\u001fusers"
+      }
+    ]
+  },
+  "seed": {
+    "value": "s",
+    "source": "option"
+  },
+  "rule": {
+    "id": "T11",
+    "source": "heuristic",
+    "description": "a named string kind (name, city, status, bio, slug...)"
+  },
+  "listRule": {
+    "id": "L6",
+    "source": "default",
+    "description": "no list rule matched: a single value",
+    "isList": false
+  },
+  "decisions": [
+    {
+      "kind": "list",
+      "value": false,
+      "source": "default",
+      "rule": "L6"
+    },
+    {
+      "kind": "scalar",
+      "value": "String",
+      "source": "heuristic",
+      "rule": "T11"
+    },
+    {
+      "kind": "null",
+      "value": 0.5,
+      "source": "directive",
+      "rule": "nullRate"
+    }
+  ],
+  "precedence": [
+    {
+      "property": "gen",
+      "winner": "heuristic",
+      "candidates": [
+        {
+          "source": "heuristic",
+          "rule": "T11",
+          "value": "place.city",
+          "description": "a named string kind (name, city, status, bio, slug...)",
+          "wins": true
+        }
+      ]
+    },
+    {
+      "property": "list",
+      "winner": "heuristic",
+      "candidates": [
+        {
+          "source": "heuristic",
+          "rule": "L6",
+          "value": false,
+          "description": "no list rule matched: a single value",
+          "wins": true
+        }
+      ]
+    },
+    {
+      "property": "nullRate",
+      "winner": "directive",
+      "candidates": [
+        {
+          "source": "directive",
+          "value": 0.5,
+          "wins": true
+        }
+      ]
+    }
+  ],
+  "nullRate": {
+    "rate": 0.5,
+    "draw": 0.44134951638741515,
+    "key": "gh1\u001fs\u001fe\u001fUser\u001f3\u001fcity\u001fnull",
+    "hit": true
+  },
+  "summary": "users.2.city = null: a generator, chosen by rule T11 (heuristic), on entity User:3 (shared); nullRate 0.5 hit (draw 0.44134951638741515)."
+}

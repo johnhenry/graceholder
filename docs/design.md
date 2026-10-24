@@ -27,6 +27,7 @@ Decisions already made: the query alone is the main mode (no schema required); l
 17. [Schema mode](#17-schema-mode)
 18. [`specFromSamples`](#18-specfromsamples)
 19. [Bulk generation: `stream`, NDJSON, CSV, SQL](#19-bulk-generation)
+20. [Developer experience: typed results, `explain`, playground](#20-developer-experience)
 
 ---
 
@@ -906,3 +907,48 @@ All three writers are pure functions of the stream. Output is byte-identical for
 - **urql.** The exchange handles `query` and `mutation` operations and forwards the rest (subscriptions, teardowns). It replaces `fetchExchange` and goes after `cacheExchange`; a teardown with the same key cancels a pending answer.
 - **fetch.** `createFetch` matches on the URL (default: path ends in `/graphql`), reads POST (JSON or `application/graphql`) and GET (`query`, `variables`, `operationName`), answers batches with arrays, and returns a real `Response`: 200 for any GraphQL result including `errors`, 400 for malformed requests, 405 for other methods and for a mutation over GET. Non-matching requests go to `fallback` or `globalThis.fetch`.
 - **Typename.** Apollo's and urql's caches add `__typename`; the executor answers it like any field, so adapter results equal the plain results plus `__typename`.
+
+## 20. Developer experience
+
+Issue #23: typed results, `explain`, and a playground page. None of it changes an output: the golden files are untouched.
+
+### 20.1 Typed results
+
+`src/typed.d.ts` is a parser and evaluator written in template literal types. `ResultOf<"{ users { id name } }">` is `{ users: { id: string; name: string }[] }`; `graceholder`, `world.query` and `stream` use it when the query is a string literal. It is a second implementation of the rules of section 4, so the work is keeping it honest, which is what three tests are for (20.4).
+
+**Pipeline.** `Tok1` pulls one token at a time from the text (a token tuple costs quadratic memory in the compiler, because every tuple length is a distinct type). A recursive descent builds an AST of fields (`{ n, a, pg, ids, ll, ls, ty, nr, gn, dv, op, sel }`), inline fragments and spreads; a selection set is a tail-recursive loop (the compiler allows 1000 steps), nested sets nest the evaluation. The evaluator flattens fragments (`Flatten`, as `flattenFields` does), merges fields with the same response key (`Dedupe`: selections concatenate), and maps each field.
+
+**Rules mirrored.** L1 to L5 (`@list`/`@one`, paging arguments, plural last word with the irregular and mass-noun tables, `list`/`all*`, an `ids` argument or a list-literal argument or a variable declared as a list); N2 and S4 (several type conditions are a union: one object type per member, each with its plain fields, `__typename` as the literal member name); S3 (Relay connections: `edges { cursor node }`, `nodes`, `pageInfo`, `totalCount`); N3 for `__typename`; T1 to T13 reduced to the JSON type (`string`, `number`, `boolean`; IDs and dates are strings); the count rule (`<x>Count`, `total<X>s` are numbers, and not lists); scalar lists (the last word is singularised before the name rules, as `classifyScalar` does); `deletedAt` is `string | null`; `@nullRate(p: > 0)` adds `| null`; `@gen`, `@pattern`, `@pick` (literal strings stay literal), `@derive`, `@type`; `@skip`/`@include` make the key optional. `ItemOf<Q, Field?>` is the element type of the root collection (the first root list, the nodes of a connection, or the named response key), used by `stream`.
+
+**What it does not know (the limits, all documented in docs/api.md).**
+
+1. Only the default inference. Schema mode, packs, `distributions: "realistic"`, `images` and scenarios change types or nullability at run time and are not read: with those, give the result type yourself.
+2. One occurrence at a time. The runtime merges every occurrence of a field of a type (N4): a directive, or a paging argument, on another occurrence of the same type's field applies to all of them; the types read only the occurrence in front of them.
+3. The spec is not read, only directives: a spec `gen`/`pick`/`list`/`nullRate` entry does not change a type.
+4. `unknown` where the generator is not in the catalogue (a pack generator named in `@gen` is `unknown` unless the catalogue knows it), for `@pick` values that are objects or mixed, and for `oneOf` in general.
+5. Several operations in one document give `Record<string, unknown>` (`operationName` is not read); so do non-literal strings, parse failures and documents given as `DocumentNode`.
+6. Size: a selection set of more than 600 items degrades to `Record<string, unknown>`; the compiler's own limit (5 million instantiations per type) is reached at around ten thousand fields in one query, where `tsc` reports error 2589 at the call. A 540-field query takes about 230 thousand instantiations (about two seconds).
+7. TypeScript 5.0 or later.
+
+### 20.2 `explain(query, path, options)`
+
+`explain` runs the query once, as `graceholder` does, with a read-only `probe` on the executor (`src/execute.js`): each resolver on the way to the path reports what it decided (list size and window, entity key and how it was chosen, the generator call, persona slots, derivation inputs, world pins, scenario draws), and `src/explain.js` assembles that with the inference result (`byPath`, `decisions`, the compiled spec) into the explanation. The probe only reads: no draw is added, removed or reordered (the notes call `keyStream` with the keys the executor already used), so the output is identical with and without it, which a test asserts for every snapshot case.
+
+**Paths** are response keys (aliases) and zero-based indexes: `users.3.email`, `users[3].email` or `["users", 3, "email"]`. Anything below a null or failed value is explained by that value (`kind: "unavailable"`). `bad-path` is thrown when the path names nothing.
+
+**Explanation.** `value`, `kind` (`scalar`, `scalar-list`, `list-element`, `object`, `list`, `connection`, `item`, `connection-member`, `unavailable`), `field`, `entity` (`identity` as `Type:key`, `shared` or owned, and `how` the owner was reached: list member, argument, pool draw, root), `collection` (size, window, count key), `key` (the exact key string, its parts and XXH64 hash), `generator` (name, arguments, output type), `rule` (id, source, description, pack), `listRule`, `decisions`, `precedence` (per overridable property, the candidates directive > spec (exact, `*`, `**`, `@Type`) > heuristic, and which wins), `persona` (slot names with their keys, pinned names), `derivation` (`derive`, `count.of`, `order` with its inputs), `nullRate` (rate, draw, hit), `scenario` (names, source, effect), `pin` (world pin, create/update date, or deletion), `seed` (value and where it came from) and a one-sentence `summary`. Every field is plain JSON; the snapshot tests in `test/snapshots/explain/` pin the format.
+
+**Modes.** Plain, world (`explain(q, p, { world })` or `world.explain`), schema, packs (the rule is `P1` and names the pack), realistic distributions, and every scenario (`errors` and `nulls` can make the value absent, `unicode` and `boundary` replace it and report the original, `empty` and `huge` report the forced size).
+
+### 20.3 Playground
+
+`playground/index.html` is one static page with a classic `<script src="graceholder.js">` (ES modules do not load from `file://`). `playground/graceholder.js` is the library plus every pack, minified, built by `npm run playground:build` (`scripts/build-playground.mjs`). It is committed so that `file://` and GitHub Pages work from a clone with no build step; `test/playground-bundle.test.js` fails when it is stale. The page loads nothing from the network (the test blocks every request and checks none is attempted) and keeps its state in the URL hash. Pages setup is manual (repository settings, deploy from the `main` branch root; the page is then at `/playground/`); no deploy workflow is shipped.
+
+### 20.4 Tests
+
+- `test/types/typed.ts`: positive cases (`Equal<>`) and `@ts-expect-error` negatives, checked by `npm run typecheck` (which also checks `typed.d.ts` itself with `skipLibCheck` off, `tsconfig.dts.json`).
+- `test/typed-vs-runtime.test.js`: 33 fixture queries through the TypeScript compiler API; the inferred type must describe the real output for four seeds, with no `unknown` anywhere unexpected. The same file lists the known divergences and asserts that they still diverge, so a limit that gets lifted must be removed from the docs.
+- `test/typed-fuzz.test.js`: 100 seeded random queries (directives, fragments, unions, connections, aliases), two seeds each.
+- `test/typed-perf.test.js`: a 540-field query within an instantiation and time bound; 25 levels of nesting; the 600-item degradation.
+- `test/explain.test.js`: 41 snapshots, the no-change invariant, every leaf of several outputs explained with its own value, key reconstruction, path forms and errors.
+- `test/playground.test.js`: headless Chromium from `file://` and over http, offline.

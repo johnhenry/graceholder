@@ -1,0 +1,149 @@
+{
+  "path": "users.2.posts.1.author.name",
+  "value": "Yusuf Bauer",
+  "kind": "scalar",
+  "field": {
+    "name": "name",
+    "parentType": "Author",
+    "path": "users.posts.author.name",
+    "type": "String",
+    "list": false,
+    "nullable": false
+  },
+  "entity": {
+    "identity": "Author:89",
+    "type": "Author",
+    "key": "89",
+    "shared": true,
+    "how": [
+      {
+        "path": "users",
+        "field": "users",
+        "via": "list",
+        "index": 2,
+        "key": "3",
+        "shared": true,
+        "size": 5,
+        "window": {
+          "start": 1,
+          "total": null,
+          "endless": true
+        },
+        "countKey": "gh1\u001fs\u001fl\u001fQuery\u001fQuery\u001fusers"
+      },
+      {
+        "path": "users.2.posts",
+        "field": "posts",
+        "via": "list",
+        "index": 1,
+        "key": "3.posts.2",
+        "shared": false,
+        "size": 2,
+        "window": {
+          "start": 1,
+          "total": null,
+          "endless": true
+        },
+        "countKey": "gh1\u001fs\u001fl\u001fUser\u001f3\u001fposts"
+      },
+      {
+        "path": "users.2.posts.1.author",
+        "field": "author",
+        "via": "entity",
+        "mode": "pool",
+        "key": "89",
+        "shared": true,
+        "note": "a stable reference into the pool of the type (1 to 100), drawn from the key above"
+      }
+    ]
+  },
+  "key": {
+    "string": "gh1\u001fs\u001fe\u001fAuthor\u001f89\u001fname",
+    "parts": [
+      "gh1",
+      "s",
+      "e",
+      "Author",
+      "89",
+      "name"
+    ],
+    "hash": "0xe0d87b7d07e458d1"
+  },
+  "generator": {
+    "name": "person.full",
+    "args": {},
+    "outputType": "String"
+  },
+  "persona": {
+    "type": "Author",
+    "key": "89",
+    "slots": [
+      {
+        "name": "first",
+        "key": "gh1\u001fs\u001fp\u001fAuthor\u001f89\u001ffirst"
+      },
+      {
+        "name": "last",
+        "key": "gh1\u001fs\u001fp\u001fAuthor\u001f89\u001flast"
+      }
+    ]
+  },
+  "seed": {
+    "value": "s",
+    "source": "option"
+  },
+  "rule": {
+    "id": "T11",
+    "source": "heuristic",
+    "description": "a named string kind (name, city, status, bio, slug...)"
+  },
+  "listRule": {
+    "id": "L6",
+    "source": "default",
+    "description": "no list rule matched: a single value",
+    "isList": false
+  },
+  "decisions": [
+    {
+      "kind": "list",
+      "value": false,
+      "source": "default",
+      "rule": "L6"
+    },
+    {
+      "kind": "scalar",
+      "value": "String",
+      "source": "heuristic",
+      "rule": "T11"
+    }
+  ],
+  "precedence": [
+    {
+      "property": "gen",
+      "winner": "heuristic",
+      "candidates": [
+        {
+          "source": "heuristic",
+          "rule": "T11",
+          "value": "person.full",
+          "description": "a named string kind (name, city, status, bio, slug...)",
+          "wins": true
+        }
+      ]
+    },
+    {
+      "property": "list",
+      "winner": "heuristic",
+      "candidates": [
+        {
+          "source": "heuristic",
+          "rule": "L6",
+          "value": false,
+          "description": "no list rule matched: a single value",
+          "wins": true
+        }
+      ]
+    }
+  ],
+  "summary": "users.2.posts.1.author.name = \"Yusuf Bauer\": person.full(), chosen by rule T11 (heuristic), on entity Author:89 (shared)."
+}

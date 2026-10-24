@@ -1,0 +1,81 @@
+{
+  "path": "postsConnection.totalCount",
+  "value": 1000,
+  "kind": "scalar",
+  "field": {
+    "name": "totalCount",
+    "parentType": "PostConnection",
+    "path": "postsConnection.totalCount",
+    "type": "Int",
+    "list": false,
+    "nullable": false
+  },
+  "entity": {
+    "identity": "PostConnection:Query.postsConnection",
+    "type": "PostConnection",
+    "key": "Query.postsConnection",
+    "shared": true,
+    "how": [
+      {
+        "path": "postsConnection",
+        "field": "postsConnection",
+        "via": "connection",
+        "shared": true,
+        "size": 3,
+        "window": {
+          "start": 1,
+          "total": 1000,
+          "endless": true
+        },
+        "countKey": "gh1\u001fs\u001fl\u001fQuery\u001fQuery\u001fpostsConnection"
+      }
+    ]
+  },
+  "special": {
+    "name": "totalCount",
+    "description": "the size of the whole collection: the declared count, or the endless total (1000 unless $options.endlessTotal)"
+  },
+  "collection": {
+    "size": 3,
+    "window": {
+      "start": 1,
+      "total": 1000,
+      "endless": true
+    },
+    "countKey": "gh1\u001fs\u001fl\u001fQuery\u001fQuery\u001fpostsConnection"
+  },
+  "seed": {
+    "value": "s",
+    "source": "option"
+  },
+  "decisions": [],
+  "precedence": [
+    {
+      "property": "gen",
+      "winner": "heuristic",
+      "candidates": [
+        {
+          "source": "heuristic",
+          "rule": "T8",
+          "value": "int",
+          "description": "integer-like name (count, age, quantity, views...)",
+          "wins": true
+        }
+      ]
+    },
+    {
+      "property": "list",
+      "winner": "heuristic",
+      "candidates": [
+        {
+          "source": "heuristic",
+          "rule": "L6",
+          "value": false,
+          "description": "no list rule matched: a single value",
+          "wins": true
+        }
+      ]
+    }
+  ],
+  "summary": "postsConnection.totalCount = 1000: the size of the whole collection: the declared count, or the endless total (1000 unless $options.endlessTotal)."
+}

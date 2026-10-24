@@ -185,6 +185,58 @@ console.log({ sdl, titleDecision: decisions.find((d) => d.path === "posts.title"
 }
 ```
 
+## Typed results
+
+Pass the query as a string literal and the result is typed from it, the way gql.tada does it: selection sets, aliases, lists (by the same rules the runtime uses), nested lists, fragments, unions, Relay connections and scalar types by field name.
+
+```ts
+import { graceholder, createWorld, stream, type ResultOf } from "@johnhenry/graceholder";
+
+const data = graceholder("{ users(first: 3) { id name createdAt posts { title } } }");
+data.users[0].posts[0].title; // string
+data.users[0].email;          // error: not in the query
+
+type Users = ResultOf<"{ users { id age } }">; // { users: { id: string; age: number }[] }
+
+createWorld().query("{ user(id: 3) { name } }").data?.user.name; // string
+for (const u of stream("{ users { id email } }", { count: 1000 })) u.email; // string
+```
+
+Anything the types cannot read falls back to `unknown` or `Record<string, unknown>`: schema mode, packs, scenarios and the spec are not seen, and a field's directives or arguments elsewhere in the query are not merged the way the runtime merges them. [The limits](docs/api.md#typed-results) are listed, and tests compare the types of fixture and random queries with the real output.
+
+## Explain a value
+
+`explain(query, path, options)` says why a value looks the way it does: the key string, generator and arguments, the rule, spec entry or directive that decided it (with the precedence), the persona slots or derivation inputs, the entity (`User:4`, shared or owned), the scenario effect and any pin. It never changes an output.
+
+```js
+import { explain } from "@johnhenry/graceholder";
+
+const e = explain("{ users(first: 5) { id name email } }", "users.3.email", { seed: "demo" });
+console.log({ summary: e.summary, entity: e.entity.identity, key: e.key.parts, rule: e.rule.id });
+```
+
+```json
+{
+  "summary": "users.3.email = \"chloeortega@example.com\": person.email(), chosen by rule T3 (heuristic), on entity User:4 (shared).",
+  "entity": "User:4",
+  "key": [
+    "gh1",
+    "demo",
+    "e",
+    "User",
+    "4",
+    "email"
+  ],
+  "rule": "T3"
+}
+```
+
+See [docs/api.md](docs/api.md#explainquery-path-options) for the full format.
+
+## Playground
+
+[`playground/index.html`](playground/index.html) is a single static page: edit the query, spec, seed, options and scenario, see the output and the inferred SDL, and click any value to explain it. It runs from `file://` (open the file) and from GitHub Pages, and loads nothing from the network. ![the playground](playground/screenshot.png)
+
 ## Learn from real data
 
 `specFromSamples(query, samples, options?)` reads one or more real responses and writes a spec: list sizes, null rates, number ranges, boolean ratios, date ranges, ID formats (`SKU-####`), string lengths and, only when you allow it, enum-like value sets. It needs no LLM and never copies free text. See [docs/api.md](docs/api.md#specfromsamplesquery-samples-options) for the rules and [docs/cookbook.md](docs/cookbook.md#learning-a-spec-from-real-responses) for a worked example.
@@ -435,6 +487,7 @@ npm run check        # banned-token lint, typecheck, tests (including the browse
 npm run test:browser # headless Chromium smoke test (needs a Chromium, see test/browser.test.js)
 npm run golden:update  # rewrite golden files: any change is an output change, review it
 npm run docs:update    # re-run the README and docs examples and refresh their output blocks
+npm run playground:build  # rebuild playground/graceholder.js after changing src/ (a test fails when it is stale)
 ```
 
 The design is in [docs/design.md](docs/design.md). MIT licensed.

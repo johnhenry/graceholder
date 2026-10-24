@@ -1,0 +1,117 @@
+{
+  "path": "order.code",
+  "value": "ORD-6366",
+  "kind": "scalar",
+  "field": {
+    "name": "code",
+    "parentType": "Order",
+    "path": "order.code",
+    "type": "String",
+    "list": false,
+    "nullable": false
+  },
+  "entity": {
+    "identity": "Order:1",
+    "type": "Order",
+    "key": "1",
+    "shared": true,
+    "how": [
+      {
+        "path": "order",
+        "field": "order",
+        "via": "entity",
+        "mode": "root",
+        "key": "1",
+        "shared": true,
+        "note": "a root field is entity 1"
+      }
+    ]
+  },
+  "key": {
+    "string": "gh1\u001fs\u001fe\u001fOrder\u001f1\u001fcode",
+    "parts": [
+      "gh1",
+      "s",
+      "e",
+      "Order",
+      "1",
+      "code"
+    ],
+    "hash": "0x8cc761a8d3598b97"
+  },
+  "generator": {
+    "name": "pattern",
+    "args": {
+      "p": "ORD-####"
+    },
+    "outputType": "String"
+  },
+  "seed": {
+    "value": "s",
+    "source": "option"
+  },
+  "rule": {
+    "id": "gen",
+    "source": "directive",
+    "description": "generator given by @gen, @pattern, @pick or a spec entry"
+  },
+  "listRule": {
+    "id": "L6",
+    "source": "default",
+    "description": "no list rule matched: a single value",
+    "isList": false
+  },
+  "decisions": [
+    {
+      "kind": "list",
+      "value": false,
+      "source": "default",
+      "rule": "L6"
+    },
+    {
+      "kind": "scalar",
+      "value": "String",
+      "source": "directive",
+      "rule": "gen"
+    }
+  ],
+  "precedence": [
+    {
+      "property": "gen",
+      "winner": "directive",
+      "candidates": [
+        {
+          "source": "directive",
+          "value": {
+            "name": "pattern",
+            "args": {
+              "p": "ORD-####"
+            }
+          },
+          "wins": true
+        },
+        {
+          "source": "heuristic",
+          "rule": "T13",
+          "value": "words",
+          "description": "no name rule matched: two words",
+          "wins": false
+        }
+      ]
+    },
+    {
+      "property": "list",
+      "winner": "heuristic",
+      "candidates": [
+        {
+          "source": "heuristic",
+          "rule": "L6",
+          "value": false,
+          "description": "no list rule matched: a single value",
+          "wins": true
+        }
+      ]
+    }
+  ],
+  "summary": "order.code = \"ORD-6366\": pattern({\"p\":\"ORD-####\"}), chosen by rule gen (directive), on entity Order:1 (shared)."
+}

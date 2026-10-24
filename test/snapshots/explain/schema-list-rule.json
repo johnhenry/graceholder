@@ -1,0 +1,85 @@
+{
+  "path": "users",
+  "value": [
+    {
+      "id": "1",
+      "name": "Lucas Ziegler"
+    },
+    {
+      "id": "2",
+      "name": "Hector Tanaka"
+    },
+    {
+      "id": "3",
+      "name": "Anika Singh"
+    },
+    {
+      "id": "4",
+      "name": "Åsa Xu"
+    }
+  ],
+  "kind": "list",
+  "field": {
+    "name": "users",
+    "parentType": "Query",
+    "path": "users",
+    "type": "User",
+    "list": true,
+    "nullable": false
+  },
+  "entity": {
+    "identity": "Query",
+    "type": "Query",
+    "key": "Query",
+    "shared": true,
+    "how": [],
+    "note": "a field of the query root"
+  },
+  "collection": {
+    "size": 4,
+    "window": {
+      "start": 1,
+      "total": 4,
+      "endless": false
+    },
+    "countKey": "gh1\u001fs\u001fl\u001fQuery\u001fQuery\u001fusers",
+    "members": "shared (drawn from the pool of the type)"
+  },
+  "seed": {
+    "value": "s",
+    "source": "option"
+  },
+  "rule": {
+    "id": "schema",
+    "source": "schema",
+    "description": "taken from the schema"
+  },
+  "listRule": {
+    "id": "schema",
+    "source": "schema",
+    "description": "taken from the schema",
+    "isList": true
+  },
+  "decisions": [
+    {
+      "kind": "list",
+      "value": true,
+      "source": "schema",
+      "rule": "schema"
+    },
+    {
+      "kind": "nullable",
+      "value": false,
+      "source": "schema",
+      "rule": "schema"
+    },
+    {
+      "kind": "type",
+      "value": "User",
+      "source": "schema",
+      "rule": "schema"
+    }
+  ],
+  "precedence": [],
+  "summary": "users is a list of User, 4 items."
+}

@@ -110,7 +110,7 @@ export function countOf(fieldName) {
  * Pick the SDL scalar type and generator for a scalar field. First matching row wins (T1-T13).
  * @param {string} fieldName
  * @param {{ typeName: string, list: boolean, packs?: any[], realistic?: boolean }} ctx
- * @returns {{ sdl: string, gen: string, args: Record<string, any>, rule: string, nullable?: boolean }}
+ * @returns {{ sdl: string, gen: string, args: Record<string, any>, rule: string, nullable?: boolean, pack?: string }}
  */
 export function classifyScalar(fieldName, ctx) {
   if (fieldName === "__typename") return r("String", "typename", "T2");
@@ -135,7 +135,7 @@ export function classifyScalar(fieldName, ctx) {
   // packs, in order: the first pack that recognises the name wins (rule P1)
   for (const pack of ctx.packs ?? []) {
     const hit = pack.rules?.({ tokens, first, last, kind, typeName: ctx.typeName, list: ctx.list });
-    if (hit) return r(hit.sdl, hit.gen, "P1", hit.args ?? {}, hit.nullable ? { nullable: true } : {});
+    if (hit) return r(hit.sdl, hit.gen, "P1", hit.args ?? {}, { pack: pack.name, ...(hit.nullable ? { nullable: true } : {}) });
   }
   // T3
   if (last === "email" || last === "mail" || (last === "address" && has("email"))) return r("String", "person.email", "T3");

@@ -1,0 +1,131 @@
+{
+  "path": "users.1.status",
+  "value": "on",
+  "kind": "scalar",
+  "field": {
+    "name": "status",
+    "parentType": "User",
+    "path": "users.status",
+    "type": "String",
+    "list": false,
+    "nullable": false
+  },
+  "entity": {
+    "identity": "User:2",
+    "type": "User",
+    "key": "2",
+    "shared": true,
+    "how": [
+      {
+        "path": "users",
+        "field": "users",
+        "via": "list",
+        "index": 1,
+        "key": "2",
+        "shared": true,
+        "size": 2,
+        "window": {
+          "start": 1,
+          "total": null,
+          "endless": true
+        },
+        "countKey": "gh1\u001fs\u001fl\u001fQuery\u001fQuery\u001fusers"
+      }
+    ]
+  },
+  "key": {
+    "string": "gh1\u001fs\u001fe\u001fUser\u001f2\u001fstatus",
+    "parts": [
+      "gh1",
+      "s",
+      "e",
+      "User",
+      "2",
+      "status"
+    ],
+    "hash": "0x69409e01c8d56c54"
+  },
+  "generator": {
+    "name": "oneOf",
+    "args": {
+      "values": [
+        "on",
+        "off"
+      ]
+    },
+    "outputType": "String"
+  },
+  "seed": {
+    "value": "s",
+    "source": "option"
+  },
+  "rule": {
+    "id": "gen",
+    "source": "spec",
+    "description": "generator given by @gen, @pattern, @pick or a spec entry"
+  },
+  "listRule": {
+    "id": "L6",
+    "source": "default",
+    "description": "no list rule matched: a single value",
+    "isList": false
+  },
+  "decisions": [
+    {
+      "kind": "list",
+      "value": false,
+      "source": "default",
+      "rule": "L6"
+    },
+    {
+      "kind": "scalar",
+      "value": "String",
+      "source": "spec",
+      "rule": "gen"
+    }
+  ],
+  "precedence": [
+    {
+      "property": "gen",
+      "winner": "spec",
+      "candidates": [
+        {
+          "source": "spec",
+          "entry": "@User.status",
+          "matches": "@Type",
+          "value": {
+            "name": "oneOf",
+            "args": {
+              "values": [
+                "on",
+                "off"
+              ]
+            }
+          },
+          "wins": true
+        },
+        {
+          "source": "heuristic",
+          "rule": "T11",
+          "value": "oneOf",
+          "description": "a named string kind (name, city, status, bio, slug...)",
+          "wins": false
+        }
+      ]
+    },
+    {
+      "property": "list",
+      "winner": "heuristic",
+      "candidates": [
+        {
+          "source": "heuristic",
+          "rule": "L6",
+          "value": false,
+          "description": "no list rule matched: a single value",
+          "wins": true
+        }
+      ]
+    }
+  ],
+  "summary": "users.1.status = \"on\": oneOf({\"values\":[\"on\",\"off\"]}), chosen by rule gen (spec), on entity User:2 (shared)."
+}

@@ -1,0 +1,11 @@
+{
+  "path": "posts.0.author.name",
+  "kind": "unavailable",
+  "blockedAt": "posts.0.author",
+  "because": "the entity Author:7 was deleted in the world",
+  "by": {
+    "world": "deleted",
+    "entity": "Author:7"
+  },
+  "summary": "posts.0.author.name does not exist: posts.0.author is null because the entity Author:7 was deleted in the world."
+}

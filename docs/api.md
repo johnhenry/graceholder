@@ -1,7 +1,7 @@
 # API reference
 
 ```js
-import { graceholder, stream, toNDJSON, toCSV, toSQL, sqlWriter, createWorld, inferSchema, specFromSamples, analyzeSamples, registerPack, suggestSpec, buildSuggestPrompt, GraceholderError, KEY_SCHEME } from "@johnhenry/graceholder";
+import { graceholder, explain, stream, toNDJSON, toCSV, toSQL, sqlWriter, createWorld, inferSchema, specFromSamples, analyzeSamples, registerPack, suggestSpec, buildSuggestPrompt, GraceholderError, KEY_SCHEME } from "@johnhenry/graceholder";
 ```
 
 ## `graceholder(query, options?)`
@@ -617,6 +617,127 @@ console.log({ status: res.status, body: await res.json() });
 }
 ```
 
+## Typed results
+
+When the query is a string literal, `graceholder(query)`, `world.query(query)` and `stream(query)` return types inferred from the query text (TypeScript 5.0 or later). `ResultOf<Q>` and `ItemOf<Q, Field?>` are exported for your own annotations.
+
+```ts
+import { graceholder, type ResultOf, type ItemOf } from "@johnhenry/graceholder";
+
+const q = "{ users(first: 3) { id name email posts { title } } }";
+const { users } = graceholder(q);          // { id: string; name: string; email: string; posts: { title: string }[] }[]
+type One = ItemOf<typeof q>;               // one element of users, for stream(q)
+```
+
+**What is typed.** Selection sets, aliases (the response key is the key), nesting, `__typename` (the literal type name: `BlogPost` for `blogPosts`); list or single value by the rules of [How a query is read](#how-a-query-is-read) (`@list`/`@one`, paging arguments, plural names with the irregular and mass-noun tables, `list` and `all*`, an `ids` argument, a list-literal argument or a variable declared as a list); scalar types by field name (`string`, `number`, `boolean`; IDs and dates are strings; `deletedAt` is `string | null`; `<x>Count` and `total<X>s` are numbers); scalar lists (`tags` is `string[]`); `@nullRate` (adds `| null`), `@gen`/`@pattern`/`@pick` (a `@pick` of literal strings is a union of them), `@derive`, `@type`; `@skip` and `@include` (the key becomes optional); named and inline fragments, including nested ones and the same field in several places (their selections merge); unions and interfaces (one object type per member, discriminated by `__typename`); Relay connections (`edges { cursor node }`, `nodes`, `pageInfo`, `totalCount`).
+
+**What falls back.** A query that is not a literal (a `string` variable), a parsed `DocumentNode`, a parse failure, or a document with several operations gives `Record<string, unknown>`. A selection set of more than 600 items does too (the compiler's recursion limit), and a query of around ten thousand fields reaches the compiler's instantiation limit (error 2589 at the call: annotate the result yourself). Generators that the catalogue does not know (a pack generator in `@gen`) and `@pick` values that are not plain literals are `unknown`.
+
+**Limits: where the types and the runtime can disagree.** The types implement the default inference of section 4 of [docs/design.md](design.md) a second time, one occurrence of a field at a time.
+
+- *Options the types cannot see:* `schema` (types come from your schema, not from the query), `packs` (a pack can recognise a name the defaults do not: `lon` is a number with `geo`), `distributions: "realistic"`, `images`, and `scenario` (`nulls` and `errors` make fields nullable). Annotate those results yourself, for example `graceholder(q) as MyResult`.
+- *The spec:* only directives are read. A spec entry with `gen`, `pick`, `list`, `count` or `nullRate` does not change a type.
+- *Occurrences are merged at run time:* the runtime unifies every occurrence of a field of the same type (a directive, an argument or a `@type` on one occurrence applies to all). The types only look at the occurrence in front of them.
+- *Names:* the rules are keyed on the field name, so a field whose name matches a rule for another reason gets that rule's type, exactly as at run time.
+
+These limits are tested, not just stated: `test/typed-vs-runtime.test.js` runs 33 fixture queries (and four seeds each) through the TypeScript compiler API and requires the inferred type to describe the real output, `test/typed-fuzz.test.js` does the same for 100 random queries, and the same file lists the known divergences above and fails if one stops diverging, so this list cannot go stale unnoticed.
+
+## `explain(query, path, options?)`
+
+Explains the value at `path` without changing anything: the query is run once, as `graceholder` runs it, with a read-only trace.
+
+`path` is a string of response keys (aliases) and zero-based indexes (`users.3.email`, `users[3].email`) or an array (`["users", 3, "email"]`). `options` are the options of `graceholder` (seed, spec, packs, schema, scenario, ...) plus `world`: pass a world to explain a value of that world, pins and mutations included (`world.explain(query, path)` is the same). A path that names nothing throws `bad-path`; a path below a null or failed value returns `kind: "unavailable"` with the reason.
+
+```js
+import { explain } from "@johnhenry/graceholder";
+
+const e = explain(
+  "{ user { nick @gen(name: \"person.username\") } }",
+  "user.nick",
+  { seed: "demo", spec: { "user.nick": { gen: "word" }, "**.nick": { gen: "color" } } },
+);
+console.log({ rule: e.rule, seed: e.seed, precedence: e.precedence[0] });
+```
+
+```json
+{
+  "rule": {
+    "id": "gen",
+    "source": "directive",
+    "description": "generator given by @gen, @pattern, @pick or a spec entry"
+  },
+  "seed": {
+    "value": "demo",
+    "source": "option"
+  },
+  "precedence": {
+    "property": "gen",
+    "winner": "directive",
+    "candidates": [
+      {
+        "source": "directive",
+        "value": {
+          "name": "person.username",
+          "args": {}
+        },
+        "wins": true
+      },
+      {
+        "source": "spec",
+        "entry": "user.nick",
+        "matches": "exact",
+        "value": {
+          "name": "word",
+          "args": {}
+        },
+        "wins": false
+      },
+      {
+        "source": "spec",
+        "entry": "**.nick",
+        "matches": "**",
+        "value": {
+          "name": "color",
+          "args": {}
+        },
+        "wins": false
+      },
+      {
+        "source": "heuristic",
+        "rule": "T13",
+        "value": "words",
+        "description": "no name rule matched: two words",
+        "wins": false
+      }
+    ]
+  }
+}
+```
+
+The explanation (every field is plain JSON; fields that do not apply are absent):
+
+| Field | Meaning |
+|---|---|
+| `path`, `value`, `kind` | the path, the value in the output, and `scalar`, `scalar-list`, `list-element`, `object`, `list`, `connection`, `item`, `connection-member` or `unavailable` |
+| `field` | `name`, `alias`, `parentType`, `path` (field names, no aliases or indexes: the key of spec entries), `type`, `list`, `nullable` |
+| `entity` | `identity` (`Type:key`), `type`, `key`, `shared` (drawn from the shared pool of the type, or owned by its parent) and `how`: one step per list or singular field on the way (`via`, `index`, `key`, `mode`: `args`, `root`, `pool`, `owned`, `inherited`, `connection-member`; list size and window; the key of the size draw) |
+| `collection` | for lists and connections: size, window, declared count, count key, members shared or owned |
+| `key` | the key the value was drawn from: `string` (exact; fields are separated by U+001F), `parts` (`gh1`, seed, scope `e`, type, entity key, field, sub-keys) and `hash` (XXH64, hex) |
+| `generator` | `name`, `args`, `outputType` |
+| `rule` | `id` (see [How a query is read](#how-a-query-is-read)), `source` (`directive`, `spec`, `heuristic`, `default`, `schema`), `description`, `pack` |
+| `precedence` | per overridable property (`gen`, `list`, and `count`, `nullRate`, `derive`, `type`, `key`, `own`, `shared`, `seed`, `scenario` when overridden): the candidates, directive first, then each matching spec entry best first (`entry`, `matches`: `exact`, `*`, `**` or `@Type`), then the heuristic, and `wins` on the one that decided |
+| `persona` | the persona slots the generator read (`name` and the slot's key string), the persona of an inheriting child, and `pinned` names from a world |
+| `derivation` | `derive` (`from`, the source field's key), `count.of` (`of`, `size`) or `order` (items, tax draw, subtotal) |
+| `nullRate`, `scenario`, `pin` | the null draw against its rate; the scenario names, where they came from (`option` or `spec`) and what they did to this value; a world pin, created/updated date or deletion |
+| `seed` | the seed in effect and its source: `option`, `default`, `directive`, `spec`, `operation directive`, or an enclosing field |
+| `summary` | one sentence |
+
+## Playground
+
+[`playground/index.html`](../playground/index.html) is a single static page for trying queries: editors for the query, spec, seed, options and scenario (and, under "Schema mode and world", a schema and world pins), the output as clickable JSON, the inferred SDL and the explanation of whatever you click. It loads `playground/graceholder.js` (the library and every pack as one script) with a classic `<script>`, so it works when you open the file, from a local web server and from GitHub Pages, and makes no network request. The editors are saved in the URL hash ("Copy link").
+
+`npm run playground:build` rebuilds the bundle after a change in `src/`; the bundle is committed and a test fails when it is stale. To publish it, enable GitHub Pages for the repository (Settings, Pages, deploy from the `main` branch, root folder); the page is then at `https://<owner>.github.io/<repo>/playground/`. A smoke test (`npm run test:browser` runs it with the browser test) drives the page in headless Chromium from `file://` and over http with the network blocked.
+
 ## Errors
 
 `GraceholderError` has `code`, optional `path` and `hint`, and for GraphQL problems `cause` and `errors`.
@@ -635,6 +756,7 @@ console.log({ status: res.status, body: await res.json() });
 | `bad-cursor`, `bad-arguments` | undecodable cursor; negative or non-integer sizes, `page < 1`, windows over 10000 |
 | `bad-mutation`, `not-found` | a world could not read a mutation (unknown verb, no identifying argument, duplicate id); update, delete or pin of a deleted entity |
 | `unknown-pack`, `bad-pack` | `packs` names a pack that is not registered; an invalid pack, or a different pack under a used name |
+| `bad-path` | `explain`: the path names nothing in the result, or is not a string or an array of keys and indexes |
 | `bad-suggestion` | `suggestSpec` reply still invalid after the repair round |
 | `bad-schema` | the `schema` option is unreadable or invalid, has no query root, or an abstract type has no members |
 | `schema-conflict` | a directive or spec entry contradicts the schema (list or single value, `@type`, `nullRate` on a non-null field, a generator whose output does not fit, an enum value that is not declared) |
