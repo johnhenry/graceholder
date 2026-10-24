@@ -10,7 +10,7 @@ Give it a query and get data back. There is no schema to write and no random str
 - **Overrides when heuristics are wrong.** Inline directives (`@count`, `@pick`, `@pattern`, ...) or a side-car spec keyed by path, with documented precedence.
 - **Library only.** ESM, TypeScript types, Node >= 22 and browsers. `graphql` is the only runtime dependency. No network, no clock, no `Math.random`.
 
-> Status: pre-1.0 and not yet published to npm. See [STABILITY.md](STABILITY.md) for what will be frozen at 1.0.0.
+> Status: pre-1.0 (0.x). Output can still change between minor versions; see [STABILITY.md](STABILITY.md) for what will be frozen at 1.0.0.
 
 ## Install
 

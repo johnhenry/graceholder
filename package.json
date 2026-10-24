@@ -1,7 +1,6 @@
 {
   "name": "@johnhenry/graceholder",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
   "description": "Consistently repeatable generated data, in any shape you want, from a GraphQL query.",
   "keywords": [
     "graphql",
