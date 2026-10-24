@@ -525,6 +525,8 @@ Scenarios make edge cases repeatable. A scenario never changes how a value is ge
 - With the default `errors: "throw"` the call throws a [`GraceholderError`](#errors) with code `graphql`, `error.errors` (the same plain errors) and `error.data` (the partial data), because a bare `data` could not report the failures. Use `errors: "result"` with this scenario.
 - A world returns the same `{ data, errors }` from `world.query`. Genuine failures (bad arguments, bad cursors) are not scenario errors and behave as before.
 
+`scenario` and `scenarioOptions` are also accepted by `stream`, `toNDJSON`, `toCSV`, `toSQL` (an `empty` stream has no rows) and by every client adapter (as world options).
+
 Pinned world values beat `unicode` and `boundary`; `nulls` and `errors` beat pins (they are about the response, not the entity).
 
 ## Property testing with fast-check

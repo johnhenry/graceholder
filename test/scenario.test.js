@@ -306,3 +306,24 @@ test("schema mode: nulls nulls exactly the nullable fields, errors propagate thr
   assert.equal(none.errors, undefined);
   assert.deepEqual(none.data, graceholder(q, { ...opts, schema: SCHEMA }));
 });
+
+test("scenarios flow through bulk streams, SQL, world streams and the fetch adapter", async () => {
+  const { stream, toSQL } = await import("../src/index.js");
+  const { createFetch } = await import("../src/adapters/fetch.js");
+  const q = "{ posts { id title author { name } } }";
+  assert.deepEqual([...stream(q, { count: 3, scenario: "empty" })], []);
+  const nulls = [...stream(q, { count: 2, scenario: "nulls" })];
+  assert.ok(nulls.every((p) => typeof p.id === "string" && p.title === null && p.author === null));
+  const plain = [...stream(q, { count: 2 })];
+  const uni = [...stream(q, { count: 2, scenario: "unicode" })];
+  assert.deepEqual(uni.map((p) => p.id), plain.map((p) => p.id));
+  assert.notDeepEqual(uni.map((p) => p.title), plain.map((p) => p.title));
+  assert.deepEqual(uni, [...stream(q, { count: 2, scenario: "unicode" })]);
+  assert.ok([...toSQL(q, { count: 2, scenario: "unicode" })].join("") !== [...toSQL(q, { count: 2 })].join(""));
+  assert.deepEqual([...createWorld({ scenario: "empty" }).stream("{ users { id } }", { count: 3 })], []);
+
+  const post = (f, query) => f("http://x/graphql", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ query }) }).then((r) => r.json());
+  assert.deepEqual(await post(createFetch({ seed: "x", scenario: "empty" }), "{ users { id } }"), { data: { users: [] } });
+  const failing = await post(createFetch({ seed: "x", scenario: "errors", scenarioOptions: { errorRate: 1 } }), "{ users { id } }");
+  assert.ok(failing.errors.length > 0 && failing.errors[0].extensions.scenario === "errors");
+});
