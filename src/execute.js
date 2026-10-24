@@ -1,6 +1,6 @@
 // Execution: graphql-js `execute` over the inferred schema with keyed resolvers
 // (docs/design.md section 8; key rules in sections 2 and 3).
-import { buildSchema, execute, validate } from "graphql";
+import { buildSchema, execute, validate, isNonNullType } from "graphql";
 import { GraceholderError } from "./errors.js";
 import { keyStream, KEY_SCHEME } from "./key.js";
 import { xxh64 } from "./xxh64.js";
@@ -9,6 +9,7 @@ import { encodeCursor, decodeCursor } from "./cursor.js";
 import { argsKeyOf, entityKeyFromArgs } from "./args.js";
 import { classifyScalar, isSeriesType } from "./rules.js";
 import { tokenize, typeNameFor } from "./naming.js";
+import { ScenarioError, hugeSize, HUGE_TOTAL, isTextGen, unicodeValue, boundaryValue, DEFAULT_ERROR_RATE } from "./scenario.js";
 
 export const POOL_SIZE = 100;
 export const ENDLESS_TOTAL = 1000;
@@ -107,7 +108,7 @@ const slugify = (v) => String(v).toLowerCase().replace(/[^a-z0-9]+/g, "-").repla
 
 /**
  * @param {{ sdl: string, document: any, model: Map<string, Map<string, any>>, abstracts: Map<string, any>, opSeed?: string, schema?: import("graphql").GraphQLSchema, rootType?: string }} inferred
- * @param {{ seed: string|number, anchorMs: number, locale?: string, variables?: Record<string, unknown>, poolSize?: number, endlessTotal?: number, world?: any, trace?: (path: any, value: any) => void, images?: "url"|"svg", packs?: any[], realistic?: boolean }} opts
+ * @param {{ seed: string|number, anchorMs: number, locale?: string, variables?: Record<string, unknown>, poolSize?: number, endlessTotal?: number, errorRate?: number, world?: any, trace?: (path: any, value: any) => void, images?: "url"|"svg", packs?: any[], realistic?: boolean }} opts
  * @returns {import("graphql").ExecutionResult}
  */
 export function run(inferred, opts) {
@@ -124,6 +125,9 @@ export function run(inferred, opts) {
   const rootSeed = inferred.opSeed ?? opts.seed;
   const ws = opts.world;
   const anchorIso = new Date(opts.anchorMs).toISOString();
+  const errorRate = opts.errorRate ?? DEFAULT_ERROR_RATE;
+  /** how many lists enclose the field being resolved (resolvers run one at a time, so this is safe to share) */
+  let curDepth = 0;
 
   const K = (seed, scope, typeName, entityKey, fieldName, subKeys) => ({ seed, scope, typeName, entityKey, fieldName, subKeys });
   const sub = (argsKey) => (argsKey ? [argsKey] : undefined);
@@ -132,6 +136,9 @@ export function run(inferred, opts) {
   /** Collection size: a declared @count/spec count, else a keyed 3 to 10. */
   const count = (seed, parent, entityKey, fieldName, argsKey) => {
     const declared = fieldOf(parent, fieldName)?.count;
+    const sc = fieldOf(parent, fieldName)?.scenario;
+    if (sc?.includes("empty")) return 0;
+    if (sc?.includes("huge")) return hugeSize(curDepth);
     const stream = keyStream(K(seed, "l", parent, entityKey, fieldName, sub(argsKey)));
     if (declared?.n !== undefined) return declared.n;
     if (declared) return stream.int(declared.min, declared.max);
@@ -303,12 +310,15 @@ export function run(inferred, opts) {
     const n = count(seed, parent, entityKey, name, "");
     const memberKey = memberKeyFn(parent, entityKey, name, "", info ?? {});
     const f = info ?? { kind: "object", list: true, typeName: typeNameFor(name) };
+    if (n === 0 && info?.scenario?.includes("empty")) return { size: 0, keyAt: memberKey };
     const ov = overlay(f, parent, entityKey, "", memberKey, n, false);
     return ov ?? { size: n, keyAt: memberKey };
   };
 
   /** Resolve a (possibly paged) collection field to its window of member keys. */
   const collection = (seed, f, parent, entityKey, fieldName, args) => {
+    if (f.scenario?.includes("empty")) return { start: 1, count: 0, total: 0, endless: false, memberKey: () => "" };
+    const endlessTotal = f.scenario?.includes("huge") ? HUGE_TOTAL : opts.endlessTotal ?? ENDLESS_TOTAL;
     const idsArg = Array.isArray(args.ids) ? args.ids : undefined;
     if (idsArg && !f.connection) {
       const keys = idsArg.map((v) => (typeof v === "string" ? v : JSON.stringify(v)));
@@ -333,11 +343,26 @@ export function run(inferred, opts) {
     return { ...win, memberKey };
   };
 
+  /** The unicode and boundary scenarios: swap a generated scalar for an edge-case value. */
+  const edge = (f, value, seed, parent, entityKey, fieldName, index) => {
+    const sc = f.scenario;
+    if (!sc || value === null || value === undefined || (!sc.includes("unicode") && !sc.includes("boundary"))) return value;
+    const text = f.sdl === "String" && isTextGen(f.gen);
+    const wantUnicode = sc.includes("unicode") && text;
+    const wantBoundary = sc.includes("boundary") && !f.gen?.startsWith("id.") && (f.sdl === "Int" || f.sdl === "Float" || f.sdl === "DateTime" || text);
+    if (!wantUnicode && !wantBoundary) return value;
+    const stream = keyStream(K(seed, "e", parent, entityKey, fieldName, ["~scenario", `edge${index}`]));
+    if (wantUnicode && (!wantBoundary || stream.bool(0.5))) return unicodeValue(stream);
+    return boundaryValue(f.sdl, stream);
+  };
+
   const fieldResolver = (source, args, _ctx, info) => {
     const parent = info.parentType.name;
     const fieldName = info.fieldName;
     const f = fieldOf(parent, fieldName);
     if (!f) return undefined;
+    curDepth = 0;
+    for (let p = info.path; p; p = p.prev) if (typeof p.key === "number") curDepth++;
     const entityKey = source.entityKey;
     const seed = f.seed ?? source.seed ?? rootSeed;
     const ref = (typeName, key, extra) => ({ typeName, entityKey: key, seed, ...extra });
@@ -369,6 +394,12 @@ export function run(inferred, opts) {
       default:
     }
 
+    const sc = f.scenario;
+    if (sc?.includes("errors") && f.name !== "id") {
+      const stream = keyStream(K(seed, "e", parent, entityKey, fieldName, ["~scenario", "error"]));
+      if (stream.float() < errorRate) throw new ScenarioError(stream);
+    }
+    if (sc?.includes("nulls") && !isNonNullType(info.returnType)) return null;
     if (ws && f.kind === "scalar") {
       const o = worldValue(parent, entityKey, fieldName);
       if (o.has) return o.value;
@@ -378,9 +409,9 @@ export function run(inferred, opts) {
     const argsKey = argsKeyOf(args);
     if (f.kind === "scalar") {
       const own = source.persona ? { personaType: source.persona.type } : {};
-      if (!f.list) return scalar(seed, f, parent, entityKey, fieldName, sub(argsKey), source.persona?.key ?? entityKey, { ...own, series: source.series && { ...source.series } });
+      if (!f.list) return edge(f, scalar(seed, f, parent, entityKey, fieldName, sub(argsKey), source.persona?.key ?? entityKey, { ...own, series: source.series && { ...source.series } }), seed, parent, entityKey, fieldName, "");
       const n = count(seed, parent, entityKey, fieldName, argsKey);
-      return Array.from({ length: n }, (_, i) => scalar(seed, f, parent, entityKey, fieldName, argsKey ? [argsKey, i] : [i], `${entityKey}.${fieldName}.${i + 1}`));
+      return Array.from({ length: n }, (_, i) => edge(f, scalar(seed, f, parent, entityKey, fieldName, argsKey ? [argsKey, i] : [i], `${entityKey}.${fieldName}.${i + 1}`), seed, parent, entityKey, fieldName, i));
     }
     if (f.connection) {
       const conn = collection(seed, f, parent, entityKey, fieldName, args);

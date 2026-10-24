@@ -1,0 +1,201 @@
+{
+  "name": "scenario-huge: scoped to users.posts, which ignores nothing else",
+  "header": {
+    "locale": "en",
+    "keyScheme": "gh1"
+  },
+  "input": {
+    "query": "{ users { id fullName email age createdAt postCount posts { id title likes } address { city } } }",
+    "options": {
+      "seed": "scenarios"
+    },
+    "spec": {
+      "users": {
+        "count": 2
+      },
+      "users.posts": {
+        "scenario": "huge"
+      }
+    }
+  },
+  "output": {
+    "users": [
+      {
+        "id": "1",
+        "fullName": "Yara Łukasik",
+        "email": "yara.lukasik@example.org",
+        "age": 51,
+        "createdAt": "2023-10-20T20:23:57.674Z",
+        "postCount": 15,
+        "posts": [
+          {
+            "id": "401798",
+            "title": "Reprehenderit Cillum Rem Eiusmod Accusamus",
+            "likes": 4649
+          },
+          {
+            "id": "259185",
+            "title": "Praesentium Nulla Et Quas Est",
+            "likes": 649
+          },
+          {
+            "id": "850845",
+            "title": "Aliquip Tempor Dolor Laudantium Esse Veniam",
+            "likes": 4442
+          },
+          {
+            "id": "719028",
+            "title": "Lorem Occaecat Laborum Animi Anim",
+            "likes": 1696
+          },
+          {
+            "id": "700862",
+            "title": "Culpa Dolores Esse",
+            "likes": 630
+          },
+          {
+            "id": "572930",
+            "title": "Praesentium Accusantium Pariatur Nostrud Commodo Anim",
+            "likes": 2282
+          },
+          {
+            "id": "960430",
+            "title": "Mollit Praesentium Unde",
+            "likes": 1363
+          },
+          {
+            "id": "462725",
+            "title": "Atque Exercitation Sint",
+            "likes": 1069
+          },
+          {
+            "id": "879457",
+            "title": "Laboris Error Totam Eos Eu",
+            "likes": 4298
+          },
+          {
+            "id": "687227",
+            "title": "Excepteur Adipiscing Sint Velit Lorem",
+            "likes": 2541
+          },
+          {
+            "id": "804471",
+            "title": "Provident Excepteur Anim Laudantium Accusamus Eos",
+            "likes": 3268
+          },
+          {
+            "id": "534534",
+            "title": "Accusantium Minim Ullamco Aute Quis Cillum",
+            "likes": 3412
+          },
+          {
+            "id": "210692",
+            "title": "Labore Aliquip Officia Cillum In Enim",
+            "likes": 4016
+          },
+          {
+            "id": "174465",
+            "title": "Sit Dolores Consectetur Excepturi Odio Deserunt",
+            "likes": 1893
+          },
+          {
+            "id": "978912",
+            "title": "Blanditiis In Magna Aute Eu Dignissimos",
+            "likes": 3563
+          }
+        ],
+        "address": {
+          "city": "Bristol"
+        }
+      },
+      {
+        "id": "2",
+        "fullName": "Wanda Xu",
+        "email": "wandaxu@example.com",
+        "age": 35,
+        "createdAt": "2024-11-12T20:25:32.209Z",
+        "postCount": 15,
+        "posts": [
+          {
+            "id": "304767",
+            "title": "Nostrud Deserunt Consequat Sunt Omnis",
+            "likes": 2759
+          },
+          {
+            "id": "245607",
+            "title": "Non Blanditiis Accusantium",
+            "likes": 380
+          },
+          {
+            "id": "303968",
+            "title": "Et Iste Voluptatum Commodo",
+            "likes": 4614
+          },
+          {
+            "id": "20609",
+            "title": "Nostrud Mollitia Iusto Velit",
+            "likes": 1943
+          },
+          {
+            "id": "344675",
+            "title": "Ullamco Rem Totam Duis Esse",
+            "likes": 2703
+          },
+          {
+            "id": "865951",
+            "title": "Totam Sit Culpa Officia Proident Dignissimos",
+            "likes": 2931
+          },
+          {
+            "id": "964918",
+            "title": "Consectetur Iste Voluptate Voluptatem Unde Aliqua",
+            "likes": 1583
+          },
+          {
+            "id": "669471",
+            "title": "Laborum Aliquip Occaecati Deleniti Natus",
+            "likes": 1368
+          },
+          {
+            "id": "428450",
+            "title": "Anim Error Dolor",
+            "likes": 2358
+          },
+          {
+            "id": "350818",
+            "title": "Excepteur Ea Elit At Deleniti",
+            "likes": 3855
+          },
+          {
+            "id": "136050",
+            "title": "Sit Totam Adipiscing Mollitia Veniam",
+            "likes": 1559
+          },
+          {
+            "id": "75033",
+            "title": "Ipsum Provident Perspiciatis Nostrud Voluptatem",
+            "likes": 1572
+          },
+          {
+            "id": "772637",
+            "title": "Fugiat Voluptate Do Voluptatem Proident",
+            "likes": 107
+          },
+          {
+            "id": "493745",
+            "title": "Commodo Dolore Nisi Ex",
+            "likes": 476
+          },
+          {
+            "id": "668545",
+            "title": "Consectetur Fugiat Eu Adipiscing Minim Do",
+            "likes": 702
+          }
+        ],
+        "address": {
+          "city": "Fairview"
+        }
+      }
+    ]
+  }
+}

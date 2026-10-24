@@ -3,7 +3,7 @@ export class GraceholderError extends Error {
   /**
    * @param {string} code
    * @param {string} message
-   * @param {{ path?: string, hint?: string, cause?: unknown, errors?: readonly any[] }} [extra]
+   * @param {{ path?: string, hint?: string, cause?: unknown, errors?: readonly any[], data?: unknown }} [extra]
    */
   constructor(code, message, extra = {}) {
     super(message, extra.cause === undefined ? undefined : { cause: extra.cause });
@@ -12,5 +12,6 @@ export class GraceholderError extends Error {
     if (extra.path !== undefined) this.path = extra.path;
     if (extra.hint !== undefined) this.hint = extra.hint;
     if (extra.errors !== undefined) this.errors = extra.errors;
+    if (extra.data !== undefined) this.data = extra.data;
   }
 }

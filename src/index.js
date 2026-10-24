@@ -6,8 +6,9 @@ import { generateResult } from "./generate.js";
 import { KEY_SCHEME } from "./key.js";
 import { registerPack, registeredPacks } from "./pack-registry.js";
 import { realismOptions } from "./generate.js";
+import { ScenarioError, SCENARIOS, globalScenarios } from "./scenario.js";
 
-export { GraceholderError, KEY_SCHEME, registerPack, registeredPacks };
+export { GraceholderError, KEY_SCHEME, registerPack, registeredPacks, SCENARIOS };
 export { createWorld } from "./world.js";
 export { stream } from "./bulk/stream.js";
 export { toNDJSON } from "./bulk/ndjson.js";
@@ -25,6 +26,12 @@ export function graceholder(query, options = {}) {
   const mode = options.errors ?? "throw";
   try {
     const result = generateResult(query, options);
+    if (result.errors?.length && result.errors.every((e) => e.originalError instanceof ScenarioError)) {
+      // the errors scenario: a partial result. Scenario errors are plain JSON, in the usual GraphQL response shape.
+      const errors = result.errors.map((e) => e.toJSON());
+      if (mode === "result") return { data: result.data ?? null, errors };
+      throw new GraceholderError("graphql", errors[0].message, { cause: result.errors[0], errors, data: result.data ?? null });
+    }
     if (result.errors?.length) {
       // an error raised by one of our resolvers (bad cursor, bad arguments) keeps its own code
       const own = result.errors.find((e) => e.originalError instanceof GraceholderError);
@@ -45,10 +52,10 @@ export function graceholder(query, options = {}) {
  * Infer the SDL and the decisions behind it, without generating data.
  * @param {string|import("graphql").DocumentNode} query
  * @param {Record<string, any>} [spec] side-car spec (section 5.2)
- * @param {{ operationName?: string, variables?: Record<string, unknown>, strict?: boolean, distributions?: "uniform"|"realistic", packs?: any[], images?: "url"|"svg", schema?: any }} [options]
+ * @param {{ operationName?: string, variables?: Record<string, unknown>, strict?: boolean, distributions?: "uniform"|"realistic", packs?: any[], images?: "url"|"svg", schema?: any, scenario?: string|string[] }} [options]
  */
 export function inferSchema(query, spec, options = {}) {
   const realism = realismOptions(options);
-  const { sdl, decisions, document } = infer(query, { operationName: options.operationName, variables: options.variables, strict: options.strict, spec, schema: options.schema, packs: realism.packs, realistic: realism.realistic });
+  const { sdl, decisions, document } = infer(query, { scenario: globalScenarios(options.scenario), operationName: options.operationName, variables: options.variables, strict: options.strict, spec, schema: options.schema, packs: realism.packs, realistic: realism.realistic });
   return { sdl, decisions, document };
 }

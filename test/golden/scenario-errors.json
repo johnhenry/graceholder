@@ -1,0 +1,336 @@
+{
+  "name": "scenario-errors: partial data plus errors with paths (result mode)",
+  "header": {
+    "locale": "en",
+    "keyScheme": "gh1"
+  },
+  "input": {
+    "query": "{ users { id fullName email age createdAt postCount posts { id title likes } address { city } } }",
+    "options": {
+      "seed": "errs",
+      "scenario": "errors",
+      "errors": "result",
+      "scenarioOptions": {
+        "errorRate": 0.3
+      }
+    },
+    "spec": {
+      "users": {
+        "count": 3
+      }
+    }
+  },
+  "output": {
+    "data": {
+      "users": [
+        {
+          "id": "1",
+          "fullName": "Alan Petrov",
+          "email": "alan.petrov@example.net",
+          "age": null,
+          "createdAt": "2021-08-11T03:31:55.577Z",
+          "postCount": null,
+          "posts": null,
+          "address": {
+            "city": "Kingston"
+          }
+        },
+        {
+          "id": "2",
+          "fullName": null,
+          "email": "xavier.larsen73@mail.example.com",
+          "age": null,
+          "createdAt": "2022-11-08T05:43:03.735Z",
+          "postCount": 3,
+          "posts": [
+            {
+              "id": "905036",
+              "title": null,
+              "likes": 4062
+            },
+            {
+              "id": "667065",
+              "title": "Quas Quos Doloremque",
+              "likes": 3541
+            },
+            {
+              "id": "94170",
+              "title": "Aliquip Minim Aliqua Laudantium Sed",
+              "likes": null
+            }
+          ],
+          "address": {
+            "city": "Centerville"
+          }
+        },
+        {
+          "id": "3",
+          "fullName": null,
+          "email": "chiara.andersson@example.net",
+          "age": 58,
+          "createdAt": null,
+          "postCount": 6,
+          "posts": [
+            {
+              "id": "926380",
+              "title": "Eos Proident Nostrud Lorem Cupidatat",
+              "likes": 2266
+            },
+            {
+              "id": "284793",
+              "title": "Aliqua Quas Sed Adipiscing",
+              "likes": 4213
+            },
+            {
+              "id": "456585",
+              "title": "Non Odio Occaecati Quos Eu",
+              "likes": 3023
+            },
+            {
+              "id": "31547",
+              "title": "Esse Ut Nostrud",
+              "likes": null
+            },
+            {
+              "id": "436890",
+              "title": "Error Occaecati Doloremque Laborum",
+              "likes": 270
+            },
+            {
+              "id": "664498",
+              "title": null,
+              "likes": 1642
+            }
+          ],
+          "address": null
+        }
+      ]
+    },
+    "errors": [
+      {
+        "message": "Not authorized to read this field",
+        "locations": [
+          {
+            "line": 1,
+            "column": 29
+          }
+        ],
+        "path": [
+          "users",
+          0,
+          "age"
+        ],
+        "extensions": {
+          "code": "FORBIDDEN",
+          "scenario": "errors"
+        }
+      },
+      {
+        "message": "Not authorized to read this field",
+        "locations": [
+          {
+            "line": 1,
+            "column": 43
+          }
+        ],
+        "path": [
+          "users",
+          0,
+          "postCount"
+        ],
+        "extensions": {
+          "code": "FORBIDDEN",
+          "scenario": "errors"
+        }
+      },
+      {
+        "message": "Not authorized to read this field",
+        "locations": [
+          {
+            "line": 1,
+            "column": 53
+          }
+        ],
+        "path": [
+          "users",
+          0,
+          "posts"
+        ],
+        "extensions": {
+          "code": "FORBIDDEN",
+          "scenario": "errors"
+        }
+      },
+      {
+        "message": "Simulated resolver failure",
+        "locations": [
+          {
+            "line": 1,
+            "column": 14
+          }
+        ],
+        "path": [
+          "users",
+          1,
+          "fullName"
+        ],
+        "extensions": {
+          "code": "INTERNAL_SERVER_ERROR",
+          "scenario": "errors"
+        }
+      },
+      {
+        "message": "The request timed out",
+        "locations": [
+          {
+            "line": 1,
+            "column": 29
+          }
+        ],
+        "path": [
+          "users",
+          1,
+          "age"
+        ],
+        "extensions": {
+          "code": "TIMEOUT",
+          "scenario": "errors"
+        }
+      },
+      {
+        "message": "Simulated resolver failure",
+        "locations": [
+          {
+            "line": 1,
+            "column": 64
+          }
+        ],
+        "path": [
+          "users",
+          1,
+          "posts",
+          0,
+          "title"
+        ],
+        "extensions": {
+          "code": "INTERNAL_SERVER_ERROR",
+          "scenario": "errors"
+        }
+      },
+      {
+        "message": "Simulated resolver failure",
+        "locations": [
+          {
+            "line": 1,
+            "column": 70
+          }
+        ],
+        "path": [
+          "users",
+          1,
+          "posts",
+          2,
+          "likes"
+        ],
+        "extensions": {
+          "code": "INTERNAL_SERVER_ERROR",
+          "scenario": "errors"
+        }
+      },
+      {
+        "message": "Not authorized to read this field",
+        "locations": [
+          {
+            "line": 1,
+            "column": 14
+          }
+        ],
+        "path": [
+          "users",
+          2,
+          "fullName"
+        ],
+        "extensions": {
+          "code": "FORBIDDEN",
+          "scenario": "errors"
+        }
+      },
+      {
+        "message": "The request timed out",
+        "locations": [
+          {
+            "line": 1,
+            "column": 33
+          }
+        ],
+        "path": [
+          "users",
+          2,
+          "createdAt"
+        ],
+        "extensions": {
+          "code": "TIMEOUT",
+          "scenario": "errors"
+        }
+      },
+      {
+        "message": "Not authorized to read this field",
+        "locations": [
+          {
+            "line": 1,
+            "column": 70
+          }
+        ],
+        "path": [
+          "users",
+          2,
+          "posts",
+          3,
+          "likes"
+        ],
+        "extensions": {
+          "code": "FORBIDDEN",
+          "scenario": "errors"
+        }
+      },
+      {
+        "message": "Not authorized to read this field",
+        "locations": [
+          {
+            "line": 1,
+            "column": 64
+          }
+        ],
+        "path": [
+          "users",
+          2,
+          "posts",
+          5,
+          "title"
+        ],
+        "extensions": {
+          "code": "FORBIDDEN",
+          "scenario": "errors"
+        }
+      },
+      {
+        "message": "Simulated resolver failure",
+        "locations": [
+          {
+            "line": 1,
+            "column": 78
+          }
+        ],
+        "path": [
+          "users",
+          2,
+          "address"
+        ],
+        "extensions": {
+          "code": "INTERNAL_SERVER_ERROR",
+          "scenario": "errors"
+        }
+      }
+    ]
+  }
+}

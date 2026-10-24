@@ -338,7 +338,7 @@ export function sqlWriter(source, options = {}) {
 /** The stream-level options inside a toSQL options object. */
 function streamOptions(options) {
   const out = {};
-  for (const k of ["count", "offset", "chunkSize", "field", "seed", "spec", "packs", "images", "distributions", "schema", "variables", "operationName", "locale", "anchorDate", "strict"]) {
+  for (const k of ["count", "offset", "chunkSize", "field", "seed", "spec", "packs", "images", "distributions", "schema", "variables", "operationName", "locale", "anchorDate", "strict", "scenario", "scenarioOptions"]) {
     if (options[k] !== undefined) out[k] = options[k];
   }
   return out;

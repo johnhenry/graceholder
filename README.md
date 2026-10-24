@@ -384,6 +384,41 @@ console.log(data.users.map((u) => u.name));
 
 See [docs/api.md](docs/api.md#client-adapters) for the options and [the cookbook](docs/cookbook.md#storybook-with-apollo) for Storybook and Playwright recipes.
 
+## Edge cases, repeatably
+
+`scenario` swaps the output for an edge case, deterministically: `empty`, `huge`, `nulls`, `unicode`, `boundary` and `errors`, alone or combined, for the whole query or one spec path. Without it nothing changes.
+
+```js
+import { graceholder } from "@johnhenry/graceholder";
+
+const query = "{ users(first: 2) { id name posts { id } } }";
+const spec = { "users.posts": { scenario: "empty" } };
+console.log({
+  emptyPosts: graceholder(query, { spec }).users.map((u) => u.posts.length),
+  nulls: graceholder(query, { scenario: "nulls" }).users[0],
+  errors: graceholder("{ user(id: 1) { id name email } }", { scenario: "errors", scenarioOptions: { errorRate: 0.5 }, errors: "result" }).errors.map((e) => e.path.join(".")),
+});
+```
+
+```json
+{
+  "emptyPosts": [
+    0,
+    0
+  ],
+  "nulls": {
+    "id": "1",
+    "name": null,
+    "posts": null
+  },
+  "errors": [
+    "user.name"
+  ]
+}
+```
+
+`@johnhenry/graceholder/fast-check` turns the same idea into a property-testing arbitrary over seeds and scenario sets, with shrinking. See [Scenarios](docs/api.md#scenarios) and the [cookbook](docs/cookbook.md#test-your-ui-against-every-edge-case).
+
 ## Determinism and stability
 
 The key scheme, hash (XXH64), generator (SplitMix64), vocabulary and inference rules are frozen at 1.0.0; see [STABILITY.md](STABILITY.md). Golden files in `test/golden` pin the output, are checked on Node 22 and 24, and are reproduced in a browser-like VM and in headless Chromium.

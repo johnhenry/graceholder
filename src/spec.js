@@ -1,7 +1,8 @@
 // Side-car spec: validation, path patterns and precedence (docs/design.md section 5).
 import { GraceholderError } from "./errors.js";
+import { normalizeScenarios } from "./scenario.js";
 
-const SPEC_PROPS = new Set(["list", "one", "count", "gen", "pattern", "pick", "nullRate", "derive", "type", "seed", "key", "shared", "own"]);
+const SPEC_PROPS = new Set(["list", "one", "count", "gen", "pattern", "pick", "nullRate", "derive", "type", "seed", "key", "shared", "own", "scenario"]);
 const SEGMENT = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const bad = (msg, path) => new GraceholderError("bad-spec", msg, { path });
 
@@ -51,6 +52,7 @@ function fieldProps(key, f) {
     props.gen = { name: "pattern", args: { p: f.pattern } };
   }
   if (f.pick !== undefined) props.gen = { name: "oneOf", args: { values: checkPick(f.pick, fail) } };
+  if (f.scenario !== undefined) props.scenario = normalizeScenarios(f.scenario, fail);
   if (f.nullRate !== undefined) {
     if (typeof f.nullRate !== "number" || !(f.nullRate >= 0 && f.nullRate <= 1)) throw fail("nullRate must be a number between 0 and 1");
     props.nullRate = f.nullRate;

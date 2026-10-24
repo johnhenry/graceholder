@@ -147,6 +147,7 @@ class Inferer {
     this.variables = config.variables;
     this.nullableTypes = config.nullableTypes;
     this.nullableFields = config.nullableFields;
+    this.scenario = config.scenario ?? [];
     this.fragments = fragments;
     this.varTypes = new Map((op.variableDefinitions ?? []).map((v) => [v.variable.name.value, print(v.type)]));
     this.types = new Map(); // typeName -> Map(fieldName -> info)
@@ -648,6 +649,7 @@ class Inferer {
     this.countFields();
     this.resolveDerives();
     if (this.schema) this.checkSchemaOverrides();
+    this.applyScenarios();
     for (const entry of this.spec.entries) {
       if (!entry.used) decisions.push({ path: entry.key, field: entry.key.split(".").pop(), kind: "unused", value: null, source: "spec", rule: "unused-spec-path" });
     }
@@ -690,6 +692,28 @@ class Inferer {
         if (ov.own !== undefined) info.own = ov.own;
         if (ov.shared !== undefined) info.shared = ov.shared;
         if (ov.seed !== undefined) { info.seed = ov.seed; push("seed", ov.seed, "seed", "seed"); }
+      }
+    }
+  }
+
+  /**
+   * Scenarios (docs/design.md section 16, Scenarios): each field gets the scenario set of its spec entry,
+   * else the global one. `nulls` and `errors` make an eligible field nullable in the inferred SDL, because
+   * a field the schema says is non-null could only fail by emptying its parent. Fields that are `id`, the
+   * Relay machinery, and (for `nulls`) the fields of the operation root stay non-null. In schema mode
+   * nothing is widened: the schema's own nullability decides.
+   */
+  applyScenarios() {
+    for (const fields of this.types.values()) {
+      for (const info of fields.values()) {
+        if (info.synthetic) continue;
+        const sc = info.ov.scenario ?? this.scenario;
+        if (!sc.length) continue;
+        info.scenario = sc;
+        // schema mode: the schema decides what is nullable, nothing is widened
+        if (info.name === "id" || this.schema) continue;
+        const root = info.parentType === this.rootName;
+        if (sc.includes("errors") || (sc.includes("nulls") && !root)) info.nullable = true;
       }
     }
   }
@@ -813,7 +837,7 @@ function argType(usages) {
 
 /**
  * @param {string|import("graphql").DocumentNode} query
- * @param {{ operationName?: string, spec?: any, compiledSpec?: any, variables?: Record<string, unknown>, strict?: boolean, nullableTypes?: Set<string>, nullableFields?: Set<string>, packs?: any[], realistic?: boolean, schema?: any }} [options]
+ * @param {{ operationName?: string, spec?: any, compiledSpec?: any, variables?: Record<string, unknown>, strict?: boolean, nullableTypes?: Set<string>, nullableFields?: Set<string>, packs?: any[], realistic?: boolean, schema?: any, scenario?: string[] }} [options]
  */
 export function infer(query, options = {}) {
   const doc = toDocument(query);
@@ -830,7 +854,7 @@ export function infer(query, options = {}) {
     const invalid = validate(schema, document);
     if (invalid.length) throw new GraceholderError("graphql", invalid[0].message, { cause: invalid[0], errors: invalid });
   }
-  const inf = new Inferer(op, fragments, { spec, variables, schema, nullableTypes: options.nullableTypes, nullableFields: options.nullableFields, packs: options.packs, realistic: options.realistic });
+  const inf = new Inferer(op, fragments, { spec, variables, schema, nullableTypes: options.nullableTypes, nullableFields: options.nullableFields, packs: options.packs, realistic: options.realistic, scenario: options.scenario });
   const decisions = inf.finalize();
   if (options.strict) {
     const unused = decisions.find((d) => d.kind === "unused");
