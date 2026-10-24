@@ -9,6 +9,7 @@ import { tokenize, typeNameFor } from "./naming.js";
 import { ID_ARGS, entityKeyFromArgs } from "./args.js";
 import { streamWorld } from "./bulk/stream.js";
 import { globalScenarios, errorRateOf } from "./scenario.js";
+import { explainWith, parsePath } from "./explain.js";
 import { anchorMs, checkLocale, generateResult, realismOptions, DEFAULT_ANCHOR, DEFAULT_SEED } from "./generate.js";
 
 const DEFAULT_VERBS = {
@@ -424,6 +425,11 @@ export function createWorld(options = {}) {
      */
     stream(query, opts = {}) {
       return streamWorld(query, { ...base, ...opts }, view);
+    },
+
+    /** Why the value at `path` looks the way it does in this world, pins and mutations included (see `explain`). */
+    explain(query, path, opts = {}) {
+      return explainWith(query, parsePath(path), { ...base, ...opts }, view);
     },
 
     /** Override fields of one entity ("User:42"); unpinned fields stay generated. Pins are logged. */

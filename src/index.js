@@ -10,6 +10,7 @@ import { ScenarioError, SCENARIOS, globalScenarios } from "./scenario.js";
 
 export { GraceholderError, KEY_SCHEME, registerPack, registeredPacks, SCENARIOS };
 export { createWorld } from "./world.js";
+export { explain } from "./explain.js";
 export { stream } from "./bulk/stream.js";
 export { toNDJSON } from "./bulk/ndjson.js";
 export { toCSV } from "./bulk/csv.js";

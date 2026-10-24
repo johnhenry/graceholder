@@ -1,0 +1,124 @@
+{
+  "path": "users.0.tags",
+  "value": [
+    "lorem ea",
+    "velit ad",
+    "quas totam",
+    "aute sed",
+    "amet praesentium"
+  ],
+  "kind": "scalar-list",
+  "field": {
+    "name": "tags",
+    "parentType": "User",
+    "path": "users.tags",
+    "type": "String",
+    "list": true,
+    "nullable": false
+  },
+  "entity": {
+    "identity": "User:1",
+    "type": "User",
+    "key": "1",
+    "shared": true,
+    "how": [
+      {
+        "path": "users",
+        "field": "users",
+        "via": "list",
+        "index": 0,
+        "key": "1",
+        "shared": true,
+        "size": 5,
+        "window": {
+          "start": 1,
+          "total": null,
+          "endless": true
+        },
+        "countKey": "gh1\u001fs\u001fl\u001fQuery\u001fQuery\u001fusers"
+      }
+    ]
+  },
+  "collection": {
+    "size": 5,
+    "countKey": "gh1\u001fs\u001fl\u001fUser\u001f1\u001ftags"
+  },
+  "key": {
+    "string": "gh1\u001fs\u001fe\u001fUser\u001f1\u001ftags\u001f0",
+    "parts": [
+      "gh1",
+      "s",
+      "e",
+      "User",
+      "1",
+      "tags",
+      "0"
+    ],
+    "hash": "0x5d64440008a8fe32"
+  },
+  "generator": {
+    "name": "words",
+    "args": {
+      "n": 2
+    },
+    "outputType": "String"
+  },
+  "seed": {
+    "value": "s",
+    "source": "option"
+  },
+  "rule": {
+    "id": "T13",
+    "source": "default",
+    "description": "no name rule matched: two words"
+  },
+  "listRule": {
+    "id": "L3",
+    "source": "heuristic",
+    "description": "the last word of the field name is plural",
+    "isList": true
+  },
+  "decisions": [
+    {
+      "kind": "list",
+      "value": true,
+      "source": "heuristic",
+      "rule": "L3"
+    },
+    {
+      "kind": "scalar",
+      "value": "String",
+      "source": "default",
+      "rule": "T13"
+    }
+  ],
+  "precedence": [
+    {
+      "property": "gen",
+      "winner": "heuristic",
+      "candidates": [
+        {
+          "source": "heuristic",
+          "rule": "T13",
+          "value": "words",
+          "description": "no name rule matched: two words",
+          "wins": true
+        }
+      ]
+    },
+    {
+      "property": "list",
+      "winner": "heuristic",
+      "candidates": [
+        {
+          "source": "heuristic",
+          "rule": "L3",
+          "value": true,
+          "description": "the last word of the field name is plural",
+          "wins": true
+        }
+      ]
+    }
+  ],
+  "summary": "users.0.tags is a scalar-list of String, 5 items."
+}

@@ -1,0 +1,130 @@
+{
+  "path": "postsConnection.edges.1.node.title",
+  "value": "In Qui In",
+  "kind": "scalar",
+  "field": {
+    "name": "title",
+    "parentType": "Post",
+    "path": "postsConnection.edges.node.title",
+    "type": "String",
+    "list": false,
+    "nullable": false
+  },
+  "entity": {
+    "identity": "Post:2",
+    "type": "Post",
+    "key": "2",
+    "shared": true,
+    "how": [
+      {
+        "path": "postsConnection",
+        "field": "postsConnection",
+        "via": "connection",
+        "shared": true,
+        "size": 3,
+        "window": {
+          "start": 1,
+          "total": 1000,
+          "endless": true
+        },
+        "countKey": "gh1\u001fs\u001fl\u001fQuery\u001fQuery\u001fpostsConnection"
+      },
+      {
+        "path": "postsConnection.edges",
+        "field": "edges",
+        "via": "edges",
+        "key": "2",
+        "size": 3,
+        "window": {
+          "start": 1,
+          "total": 1000,
+          "endless": true
+        }
+      },
+      {
+        "path": "postsConnection.edges.1.node",
+        "field": "node",
+        "via": "entity",
+        "mode": "connection-member",
+        "key": "2",
+        "shared": true,
+        "note": "the node of a connection edge"
+      }
+    ]
+  },
+  "key": {
+    "string": "gh1\u001fs\u001fe\u001fPost\u001f2\u001ftitle",
+    "parts": [
+      "gh1",
+      "s",
+      "e",
+      "Post",
+      "2",
+      "title"
+    ],
+    "hash": "0x59255e899adafeba"
+  },
+  "generator": {
+    "name": "title",
+    "args": {},
+    "outputType": "String"
+  },
+  "seed": {
+    "value": "s",
+    "source": "option"
+  },
+  "rule": {
+    "id": "T11",
+    "source": "heuristic",
+    "description": "a named string kind (name, city, status, bio, slug...)"
+  },
+  "listRule": {
+    "id": "L6",
+    "source": "default",
+    "description": "no list rule matched: a single value",
+    "isList": false
+  },
+  "decisions": [
+    {
+      "kind": "list",
+      "value": false,
+      "source": "default",
+      "rule": "L6"
+    },
+    {
+      "kind": "scalar",
+      "value": "String",
+      "source": "heuristic",
+      "rule": "T11"
+    }
+  ],
+  "precedence": [
+    {
+      "property": "gen",
+      "winner": "heuristic",
+      "candidates": [
+        {
+          "source": "heuristic",
+          "rule": "T11",
+          "value": "title",
+          "description": "a named string kind (name, city, status, bio, slug...)",
+          "wins": true
+        }
+      ]
+    },
+    {
+      "property": "list",
+      "winner": "heuristic",
+      "candidates": [
+        {
+          "source": "heuristic",
+          "rule": "L6",
+          "value": false,
+          "description": "no list rule matched: a single value",
+          "wins": true
+        }
+      ]
+    }
+  ],
+  "summary": "postsConnection.edges.1.node.title = \"In Qui In\": title(), chosen by rule T11 (heuristic), on entity Post:2 (shared)."
+}

@@ -840,6 +840,32 @@ console.log({ failed: result.failed, counterexample: fc.stringify(result.counter
 
 A failing run reports a fast-check `seed` and `path` (rerun with `fc.assert(property, { seed, path })` to replay it, shrinking included), and the printed sample is enough to rebuild the data without fast-check: `graceholder(query, { seed: 0, scenario: ["unicode"], errors: "result" })`. The `replay(query, sample)` helper from the same subpath does exactly that.
 
+## Why is this value what it is?
+
+Start from the output you did not expect and ask `explain` about that exact path. The summary says what produced it; `precedence` says which of a directive, a spec entry and a name rule won, so an override that "does nothing" shows up as a candidate that is not winning.
+
+```js
+import { explain, createWorld } from "@johnhenry/graceholder";
+
+const query = "{ users(first: 3) { id name email } }";
+const world = createWorld({ seed: "demo" });
+world.pin("User:2", { email: "ada@example.com" });
+
+console.log([
+  explain(query, "users.0.email", { world }).summary,
+  explain(query, "users.1.email", { world }).summary,
+]);
+```
+
+```json
+[
+  "users.0.email = \"inesolsen@example.org\": person.email(), chosen by rule T3 (heuristic), on entity User:1 (shared).",
+  "users.1.email is \"ada@example.com\" because User:2.email is pinned in the world."
+]
+```
+
+Typed results, `explain` and the playground work together: copy a query into [the playground](../playground/index.html), click the value, and the explanation panel shows the same fields as `explain`.
+
 ## In the browser
 
 The package is plain ES modules with no Node built-ins; any bundler works. The test suite bundles it with esbuild and checks that a browser-like VM and headless Chromium reproduce every golden byte for byte.

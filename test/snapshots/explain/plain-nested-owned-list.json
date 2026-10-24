@@ -1,0 +1,109 @@
+{
+  "path": "users.2.posts",
+  "value": [
+    {
+      "title": "Cillum Esse Quos",
+      "author": {
+        "name": "Mei Łukasik"
+      }
+    },
+    {
+      "title": "Eos Vero Molestias",
+      "author": {
+        "name": "Yusuf Bauer"
+      }
+    }
+  ],
+  "kind": "list",
+  "field": {
+    "name": "posts",
+    "parentType": "User",
+    "path": "users.posts",
+    "type": "Post",
+    "list": true,
+    "nullable": false
+  },
+  "entity": {
+    "identity": "User:3",
+    "type": "User",
+    "key": "3",
+    "shared": true,
+    "how": [
+      {
+        "path": "users",
+        "field": "users",
+        "via": "list",
+        "index": 2,
+        "key": "3",
+        "shared": true,
+        "size": 5,
+        "window": {
+          "start": 1,
+          "total": null,
+          "endless": true
+        },
+        "countKey": "gh1\u001fs\u001fl\u001fQuery\u001fQuery\u001fusers"
+      }
+    ]
+  },
+  "collection": {
+    "size": 2,
+    "window": {
+      "start": 1,
+      "total": null,
+      "endless": true
+    },
+    "countKey": "gh1\u001fs\u001fl\u001fUser\u001f3\u001fposts",
+    "members": "owned by the parent entity"
+  },
+  "seed": {
+    "value": "s",
+    "source": "option"
+  },
+  "rule": {
+    "id": "N3",
+    "source": "heuristic",
+    "description": "type name from the singularised, PascalCased field name"
+  },
+  "listRule": {
+    "id": "L2",
+    "source": "heuristic",
+    "description": "a paging argument (first, last, limit, offset, skip, take, page, after) makes the field a list",
+    "isList": true
+  },
+  "decisions": [
+    {
+      "kind": "list",
+      "value": true,
+      "source": "heuristic",
+      "rule": "L2"
+    },
+    {
+      "kind": "type",
+      "value": "Post",
+      "source": "heuristic",
+      "rule": "N3"
+    },
+    {
+      "kind": "arg",
+      "value": "first: Int",
+      "source": "heuristic"
+    }
+  ],
+  "precedence": [
+    {
+      "property": "list",
+      "winner": "heuristic",
+      "candidates": [
+        {
+          "source": "heuristic",
+          "rule": "L2",
+          "value": true,
+          "description": "a paging argument (first, last, limit, offset, skip, take, page, after) makes the field a list",
+          "wins": true
+        }
+      ]
+    }
+  ],
+  "summary": "users.2.posts is a list of Post, 2 items."
+}

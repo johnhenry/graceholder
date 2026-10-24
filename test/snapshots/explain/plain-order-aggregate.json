@@ -1,0 +1,103 @@
+{
+  "path": "order.total",
+  "value": 13934.32,
+  "kind": "scalar",
+  "field": {
+    "name": "total",
+    "parentType": "Order",
+    "path": "order.total",
+    "type": "Float",
+    "list": false,
+    "nullable": false
+  },
+  "entity": {
+    "identity": "Order:7",
+    "type": "Order",
+    "key": "7",
+    "shared": true,
+    "how": [
+      {
+        "path": "order",
+        "field": "order",
+        "via": "entity",
+        "mode": "args",
+        "key": "7",
+        "shared": true,
+        "note": "selected by the argument (id, key, slug, ...): the same entity wherever it is selected"
+      }
+    ]
+  },
+  "derivation": {
+    "kind": "order",
+    "gen": "order.total",
+    "items": 10,
+    "itemsField": "items",
+    "itemType": "Item",
+    "taxPercent": 7,
+    "taxKey": "gh1\u001fs\u001fp\u001fOrder\u001f7\u001ftaxRate",
+    "subtotalCents": 1302273
+  },
+  "generator": {
+    "name": "order.total",
+    "args": {},
+    "outputType": "Float"
+  },
+  "seed": {
+    "value": "s",
+    "source": "option"
+  },
+  "rule": {
+    "id": "T9",
+    "source": "heuristic",
+    "description": "decimal-like name (price, total, rating, lat...)"
+  },
+  "listRule": {
+    "id": "L6",
+    "source": "default",
+    "description": "no list rule matched: a single value",
+    "isList": false
+  },
+  "decisions": [
+    {
+      "kind": "list",
+      "value": false,
+      "source": "default",
+      "rule": "L6"
+    },
+    {
+      "kind": "scalar",
+      "value": "Float",
+      "source": "heuristic",
+      "rule": "T9"
+    }
+  ],
+  "precedence": [
+    {
+      "property": "gen",
+      "winner": "heuristic",
+      "candidates": [
+        {
+          "source": "heuristic",
+          "rule": "T9",
+          "value": "order.total",
+          "description": "decimal-like name (price, total, rating, lat...)",
+          "wins": true
+        }
+      ]
+    },
+    {
+      "property": "list",
+      "winner": "heuristic",
+      "candidates": [
+        {
+          "source": "heuristic",
+          "rule": "L6",
+          "value": false,
+          "description": "no list rule matched: a single value",
+          "wins": true
+        }
+      ]
+    }
+  ],
+  "summary": "order.total = 13934.32: derived (order), chosen by rule T9 (heuristic), on entity Order:7 (shared)."
+}

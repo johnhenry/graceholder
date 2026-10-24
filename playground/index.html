@@ -1,0 +1,608 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>graceholder playground</title>
+<meta name="description" content="Write a GraphQL query, get repeatable data. Click any value to see why it looks the way it does.">
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f6f5f1;
+    --panel: #ffffff;
+    --ink: #1d2327;
+    --muted: #5b666e;
+    --line: #d9d6cc;
+    --accent: #0b6e66;
+    --accent-ink: #ffffff;
+    --accent-soft: #d7efe9;
+    --warn: #9a3412;
+    --warn-soft: #fde8d8;
+    --str: #0b6e66;
+    --num: #8a4b08;
+    --bool: #6d3fa8;
+    --nul: #7a7f84;
+    --key: #1d2327;
+    --code: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14181b;
+      --panel: #1c2226;
+      --ink: #e8ecee;
+      --muted: #9aa5ac;
+      --line: #2e373d;
+      --accent: #4fd1c0;
+      --accent-ink: #06201d;
+      --accent-soft: #163a36;
+      --warn: #f6ad7b;
+      --warn-soft: #3a2415;
+      --str: #7ee0d2;
+      --num: #f0b66e;
+      --bool: #c4a4f0;
+      --nul: #8b949b;
+      --key: #e8ecee;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--bg); }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 15px/1.45 var(--sans);
+    padding-inline: clamp(12px, 3vw, 28px);
+    padding-block: 16px 40px;
+  }
+  header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 18px; margin-bottom: 14px; }
+  h1 { font-size: 1.25rem; margin: 0; letter-spacing: -0.01em; }
+  h1 span { color: var(--accent); }
+  header p { margin: 0; color: var(--muted); }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-left: auto; }
+  select, input, textarea, button {
+    font: inherit;
+    color: inherit;
+  }
+  select, input[type="text"] {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 5px 8px;
+  }
+  button {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 5px 10px;
+    cursor: pointer;
+  }
+  button:hover { border-color: var(--accent); }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  main { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  @media (min-width: 980px) { main { grid-template-columns: minmax(340px, 5fr) minmax(0, 7fr); align-items: start; } }
+  section.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; min-width: 0; }
+  .panel h2 { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin: 0 0 6px; font-weight: 650; }
+  label { display: block; font-size: 0.78rem; color: var(--muted); margin: 10px 0 3px; font-weight: 600; }
+  label:first-of-type { margin-top: 0; }
+  textarea {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-family: var(--code);
+    font-size: 13px;
+    line-height: 1.45;
+    resize: vertical;
+    tab-size: 2;
+    white-space: pre;
+    overflow: auto;
+  }
+  textarea.bad { border-color: var(--warn); }
+  .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }
+  .row > div { flex: 1 1 140px; min-width: 0; }
+  .row input[type="text"] { width: 100%; font-family: var(--code); font-size: 13px; }
+  fieldset { border: 0; padding: 0; margin: 0; }
+  .scenarios { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+  .scenarios label { display: inline-flex; gap: 5px; align-items: center; margin: 0; font-size: 0.85rem; color: var(--ink); font-weight: 500; }
+  .tabs { display: flex; gap: 4px; margin-bottom: 8px; }
+  .tabs button { border-radius: 6px 6px 0 0; border-bottom-color: transparent; color: var(--muted); }
+  .tabs button[aria-selected="true"] { background: var(--accent-soft); color: var(--ink); border-color: var(--accent); }
+  pre.out {
+    margin: 0;
+    padding: 8px 10px;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    font: 13px/1.5 var(--code);
+    overflow: auto;
+    max-height: 56vh;
+    white-space: pre;
+  }
+  .tok { cursor: pointer; border-radius: 3px; padding: 0 1px; }
+  .tok:hover { background: var(--accent-soft); }
+  .tok.sel { background: var(--accent); color: var(--accent-ink) !important; }
+  .t-str { color: var(--str); }
+  .t-num { color: var(--num); }
+  .t-bool { color: var(--bool); }
+  .t-nul { color: var(--nul); }
+  .k { color: var(--key); }
+  .hint { color: var(--muted); font-size: 0.8rem; margin: 6px 0 0; }
+  .banner { background: var(--warn-soft); color: var(--warn); border: 1px solid var(--warn); border-radius: 6px; padding: 8px 10px; margin-bottom: 10px; font-family: var(--code); font-size: 13px; white-space: pre-wrap; }
+  .banner[hidden] { display: none; }
+  #explain { margin-top: 14px; }
+  #explain h3 { margin: 0 0 4px; font: 600 0.95rem var(--code); word-break: break-all; }
+  .badge { display: inline-block; font: 600 0.7rem var(--sans); text-transform: uppercase; letter-spacing: 0.06em; background: var(--accent-soft); color: var(--ink); border-radius: 4px; padding: 1px 6px; margin-left: 6px; vertical-align: middle; }
+  .summary { margin: 4px 0 10px; }
+  dl.facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 12px; margin: 0; }
+  dl.facts dt { color: var(--muted); font-size: 0.8rem; font-weight: 600; padding-top: 2px; }
+  dl.facts dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+  code, .mono { font-family: var(--code); font-size: 12.5px; }
+  .keyparts { display: inline-flex; flex-wrap: wrap; gap: 2px 0; }
+  .keyparts span { background: var(--bg); border: 1px solid var(--line); padding: 0 5px; }
+  .keyparts span + span { border-left: 0; }
+  .keyparts span:first-child { border-radius: 4px 0 0 4px; }
+  .keyparts span:last-child { border-radius: 0 4px 4px 0; }
+  table.prec { border-collapse: collapse; font-size: 0.85rem; width: 100%; }
+  table.prec th, table.prec td { text-align: left; padding: 2px 8px 2px 0; vertical-align: top; }
+  table.prec th { color: var(--muted); font-weight: 600; }
+  tr.win td:first-child::before { content: "wins "; color: var(--accent); font-weight: 700; }
+  details { margin-top: 10px; }
+  summary { cursor: pointer; color: var(--muted); }
+  footer { margin-top: 18px; color: var(--muted); font-size: 0.85rem; }
+  footer a { color: var(--accent); }
+  .empty { color: var(--muted); font-style: italic; }
+</style>
+</head>
+<body>
+<header>
+  <h1><span>grace</span>holder <small style="font-weight:400;color:var(--muted)">playground</small></h1>
+  <p>Same inputs, byte-identical data. Click any value on the right to see why it looks that way.</p>
+  <div class="bar">
+    <label for="example" style="margin:0">Example</label>
+    <select id="example" aria-label="Load an example"></select>
+    <button id="share" type="button" title="Copy a link that restores this state">Copy link</button>
+  </div>
+</header>
+
+<div id="error" class="banner" role="alert" hidden></div>
+
+<main>
+  <div>
+    <section class="panel" aria-label="Inputs">
+      <h2>Inputs</h2>
+      <label for="query">Query</label>
+      <textarea id="query" rows="11" spellcheck="false" autocomplete="off"></textarea>
+
+      <div class="row" style="margin-top:10px">
+        <div><label for="seed">Seed</label><input id="seed" type="text" spellcheck="false" autocomplete="off"></div>
+      </div>
+
+      <label for="spec">Spec (JSON, keyed by path)</label>
+      <textarea id="spec" rows="5" spellcheck="false" autocomplete="off"></textarea>
+
+      <label for="options">Options (JSON: packs, images, distributions, variables, anchorDate, ...)</label>
+      <textarea id="options" rows="4" spellcheck="false" autocomplete="off"></textarea>
+
+      <fieldset>
+        <label style="margin-top:10px">Scenario</label>
+        <div class="scenarios" id="scenarios"></div>
+      </fieldset>
+
+      <details id="more">
+        <summary>Schema mode and world</summary>
+        <label for="schema">Schema (SDL; empty to infer the schema from the query)</label>
+        <textarea id="schema" rows="5" spellcheck="false" autocomplete="off"></textarea>
+        <label style="display:flex;gap:6px;align-items:center;color:var(--ink);font-weight:500"><input id="useWorld" type="checkbox"> Run in a world (pins persist for the queries below)</label>
+        <label for="pins">Pins (JSON: { "User:2": { "email": "..." } })</label>
+        <textarea id="pins" rows="3" spellcheck="false" autocomplete="off"></textarea>
+      </details>
+    </section>
+  </div>
+
+  <div>
+    <section class="panel" aria-label="Results">
+      <div class="tabs" role="tablist">
+        <button id="tab-out" role="tab" type="button" aria-selected="true" aria-controls="pane-out">Output</button>
+        <button id="tab-sdl" role="tab" type="button" aria-selected="false" aria-controls="pane-sdl">Inferred SDL</button>
+      </div>
+      <div id="pane-out" role="tabpanel" aria-labelledby="tab-out">
+        <pre class="out" id="output" aria-label="Output JSON"></pre>
+        <p class="hint">Click a value, a key's bracket or a list to explain it. Paths use response keys and zero-based indexes.</p>
+      </div>
+      <div id="pane-sdl" role="tabpanel" aria-labelledby="tab-sdl" hidden>
+        <pre class="out" id="sdl" aria-label="Inferred SDL"></pre>
+      </div>
+      <div id="explain" aria-live="polite"><p class="empty">Nothing explained yet.</p></div>
+    </section>
+  </div>
+</main>
+
+<footer>
+  Runs entirely in your browser; nothing is sent anywhere.
+  <a href="https://github.com/johnhenry/graceholder">graceholder on GitHub</a>
+</footer>
+
+<script src="graceholder.js"></script>
+<script>
+(function () {
+  "use strict";
+  var G = window.Graceholder;
+  var $ = function (id) { return document.getElementById(id); };
+  var SCENARIOS = ["empty", "huge", "nulls", "unicode", "boundary", "errors"];
+
+  var EXAMPLES = [
+    { name: "Users and posts", query: "{\n  users(first: 4) {\n    id\n    name\n    email\n    createdAt\n    tags\n    posts(first: 2) { title author { name } }\n  }\n}", spec: {}, options: {}, seed: "demo" },
+    { name: "Orders (aggregates)", query: "{\n  order(id: 7) {\n    id\n    total\n    subtotal\n    tax\n    items { name price qty }\n  }\n}", spec: {}, options: {}, seed: "demo" },
+    { name: "Relay connection", query: "{\n  postsConnection(first: 3) {\n    totalCount\n    pageInfo { hasNextPage endCursor }\n    edges { cursor node { id title } }\n  }\n}", spec: {}, options: {}, seed: "demo" },
+    { name: "Union", query: "{\n  search(first: 4) {\n    __typename\n    ... on User { id name }\n    ... on Post { id title }\n  }\n}", spec: {}, options: {}, seed: "demo" },
+    { name: "Spec and directives", query: "{\n  users(first: 3) @count(n: 3) {\n    id\n    handle @gen(name: \"person.username\")\n    status\n    nick @nullRate(p: 0.5)\n  }\n}", spec: { "users.status": { pick: ["active", "paused", "closed"] } }, options: {}, seed: "demo" },
+    { name: "Packs (geo, commerce)", query: "{\n  stores(first: 3) {\n    name\n    city\n    country\n    latitude\n    longitude\n    category\n  }\n}", spec: {}, options: { packs: ["geo", "commerce"], images: "svg" }, seed: "demo" },
+    { name: "Scenario: unicode and boundary", query: "{\n  users(first: 4) { id name age createdAt }\n}", spec: {}, options: {}, seed: "demo", scenario: ["unicode", "boundary"] },
+    { name: "Scenario: errors", query: "{\n  users(first: 4) { id name age }\n}", spec: {}, options: { scenarioOptions: { errorRate: 0.3 } }, seed: "b", scenario: ["errors"] },
+    { name: "Schema mode", query: "{\n  users { id name role }\n}", spec: {}, options: {}, seed: "demo", schema: "type Query { users: [User!]! }\ntype User { id: ID! name: String! role: Role! }\nenum Role { ADMIN EDITOR VIEWER }" },
+    { name: "World with a pin", query: "{\n  users(first: 3) { id email firstName lastName }\n}", spec: {}, options: {}, seed: "demo", world: true, pins: { "User:2": { email: "pinned@example.com", firstName: "Zed" } } }
+  ];
+
+  function pretty(v) { return JSON.stringify(v, null, 2); }
+
+  function setState(s) {
+    $("query").value = s.query;
+    $("spec").value = pretty(s.spec || {});
+    $("options").value = pretty(s.options || {});
+    $("seed").value = s.seed == null ? "" : String(s.seed);
+    $("schema").value = s.schema || "";
+    $("useWorld").checked = !!s.world;
+    $("pins").value = pretty(s.pins || {});
+    var chosen = s.scenario || [];
+    SCENARIOS.forEach(function (n) { $("sc-" + n).checked = chosen.indexOf(n) >= 0; });
+    $("more").open = !!(s.schema || s.world);
+  }
+
+  function getState() {
+    return {
+      query: $("query").value,
+      spec: $("spec").value,
+      options: $("options").value,
+      seed: $("seed").value,
+      schema: $("schema").value,
+      world: $("useWorld").checked,
+      pins: $("pins").value,
+      scenario: SCENARIOS.filter(function (n) { return $("sc-" + n).checked; })
+    };
+  }
+
+  // ---- state in the URL hash, so a link restores everything
+  function encodeState() {
+    try { return "s=" + encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(getState()))))); } catch (e) { return ""; }
+  }
+  function decodeState(hash) {
+    try {
+      var m = /^#?s=(.+)$/.exec(hash || "");
+      if (!m) return null;
+      return JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(m[1])))));
+    } catch (e) { return null; }
+  }
+
+  // ---- parsing the JSON editors
+  function parseJson(id, label, fallback) {
+    var el = $(id);
+    var text = el.value.trim();
+    el.classList.remove("bad");
+    if (!text) return fallback;
+    try { return JSON.parse(text); } catch (e) {
+      el.classList.add("bad");
+      throw new Error(label + " is not valid JSON: " + e.message);
+    }
+  }
+
+  function currentInputs() {
+    var st = getState();
+    var options = parseJson("options", "Options", {});
+    var spec = parseJson("spec", "Spec", {});
+    var o = Object.assign({}, options);
+    if (st.seed !== "") o.seed = st.seed;
+    if (Object.keys(spec).length) o.spec = spec;
+    if (st.scenario.length) o.scenario = st.scenario;
+    if (st.schema.trim()) o.schema = st.schema;
+    return { query: st.query, options: o, world: st.world, pins: st.world ? parseJson("pins", "Pins", {}) : {} };
+  }
+
+  var lastRun = null;
+
+  function makeWorld(inputs) {
+    var o = Object.assign({}, inputs.options);
+    var w = G.createWorld(o);
+    Object.keys(inputs.pins).forEach(function (ref) { w.pin(ref, inputs.pins[ref]); });
+    return w;
+  }
+
+  function run() {
+    var banner = $("error");
+    banner.hidden = true;
+    var inputs;
+    try { inputs = currentInputs(); } catch (e) { return fail(e); }
+    var data, errors, sdl;
+    try {
+      if (inputs.world) {
+        var w = makeWorld(inputs);
+        var res = w.query(inputs.query, { variables: inputs.options.variables, operationName: inputs.options.operationName });
+        data = res.data; errors = res.errors;
+        lastRun = { inputs: inputs, world: w };
+      } else {
+        var r = G.graceholder(inputs.query, Object.assign({}, inputs.options, { errors: "result" }));
+        data = r.data; errors = r.errors;
+        lastRun = { inputs: inputs };
+      }
+    } catch (e) { lastRun = null; return fail(e); }
+    try {
+      var so = inputs.options;
+      sdl = G.inferSchema(inputs.query, so.spec, { operationName: so.operationName, variables: so.variables, packs: so.packs, images: so.images, distributions: so.distributions, schema: so.schema, scenario: so.scenario }).sdl;
+    } catch (e) { sdl = "# " + (e && e.message ? e.message : e); }
+    $("sdl").textContent = sdl;
+    renderOutput(data, errors);
+    if ((data === undefined || data === null) && errors && errors.length) fail({ code: "graphql", message: errors[0].message });
+    $("explain").innerHTML = "";
+    var p = document.createElement("p");
+    p.className = "empty";
+    p.textContent = "Click a value to explain it.";
+    $("explain").appendChild(p);
+    try { history.replaceState(null, "", "#" + encodeState()); } catch (e) { /* file:// in some browsers */ }
+  }
+
+  function fail(e) {
+    var banner = $("error");
+    var code = e && e.code ? e.code + ": " : "";
+    banner.textContent = code + (e && e.message ? e.message : String(e)) + (e && e.hint ? "\nhint: " + e.hint : "");
+    banner.hidden = false;
+  }
+
+  // ---- the output tree: every value is a button that explains it
+  function span(cls, text, path) {
+    var s = document.createElement("span");
+    s.className = cls;
+    s.textContent = text;
+    if (path) {
+      s.className += " tok";
+      s.setAttribute("data-path", JSON.stringify(path));
+      s.tabIndex = 0;
+      s.setAttribute("role", "button");
+    }
+    return s;
+  }
+  function text(frag, t) { frag.appendChild(document.createTextNode(t)); }
+
+  function render(frag, value, path, depth) {
+    var pad = new Array(depth + 1).join("  ");
+    var inner = pad + "  ";
+    if (value === null) { frag.appendChild(span("t-nul", "null", path)); return; }
+    if (Array.isArray(value)) {
+      if (!value.length) { frag.appendChild(span("k", "[]", path)); return; }
+      frag.appendChild(span("k", "[", path));
+      text(frag, "\n");
+      value.forEach(function (v, i) {
+        text(frag, inner);
+        render(frag, v, path.concat([i]), depth + 1);
+        text(frag, i < value.length - 1 ? ",\n" : "\n");
+      });
+      text(frag, pad + "]");
+      return;
+    }
+    if (typeof value === "object") {
+      var keys = Object.keys(value);
+      if (!keys.length) { frag.appendChild(span("k", "{}", path)); return; }
+      frag.appendChild(span("k", "{", path));
+      text(frag, "\n");
+      keys.forEach(function (k, i) {
+        text(frag, inner);
+        frag.appendChild(span("k", JSON.stringify(k)));
+        text(frag, ": ");
+        render(frag, value[k], path.concat([k]), depth + 1);
+        text(frag, i < keys.length - 1 ? ",\n" : "\n");
+      });
+      text(frag, pad + "}");
+      return;
+    }
+    var cls = typeof value === "string" ? "t-str" : typeof value === "number" ? "t-num" : "t-bool";
+    frag.appendChild(span(cls, JSON.stringify(value), path));
+  }
+
+  function renderOutput(data, errors) {
+    var out = $("output");
+    out.textContent = "";
+    var frag = document.createDocumentFragment();
+    if (data === undefined || data === null) frag.appendChild(span("t-nul", "null"));
+    else render(frag, data, [], 0);
+    if (errors && errors.length) {
+      text(frag, "\n\n// errors\n");
+      text(frag, JSON.stringify(errors.map(function (e) { return { message: e.message, path: e.path, extensions: e.extensions }; }), null, 2));
+    }
+    out.appendChild(frag);
+  }
+
+  // ---- the explanation panel
+  function el(tag, cls, txt) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (txt != null) e.textContent = txt;
+    return e;
+  }
+  function fact(dl, term, content) {
+    if (content == null) return;
+    dl.appendChild(el("dt", null, term));
+    var dd = el("dd");
+    if (typeof content === "string") dd.textContent = content; else dd.appendChild(content);
+    dl.appendChild(dd);
+  }
+  function keyView(key) {
+    var wrap = el("span", "keyparts mono");
+    wrap.title = "key string (fields are separated by U+001F); hash " + key.hash;
+    key.parts.forEach(function (p) { wrap.appendChild(el("span", null, String(p))); });
+    return wrap;
+  }
+  function code(v) { return el("code", null, typeof v === "string" ? v : JSON.stringify(v)); }
+
+  function explainPath(path) {
+    if (!lastRun) return;
+    var box = $("explain");
+    box.textContent = "";
+    var ex;
+    try {
+      var o = Object.assign({}, lastRun.inputs.options);
+      delete o.errors;
+      ex = lastRun.world ? lastRun.world.explain(lastRun.inputs.query, path, { variables: o.variables, operationName: o.operationName }) : G.explain(lastRun.inputs.query, path, o);
+    } catch (e) {
+      var b = el("div", "banner", (e.code ? e.code + ": " : "") + e.message);
+      box.appendChild(b);
+      return;
+    }
+    var h = el("h3", null, ex.path);
+    h.appendChild(el("span", "badge", ex.kind));
+    box.appendChild(h);
+    box.appendChild(el("p", "summary", ex.summary));
+    var dl = el("dl", "facts");
+    if (ex.key) fact(dl, "Key", keyView(ex.key));
+    if (ex.generator) {
+      var g = el("span");
+      g.appendChild(code(ex.generator.name));
+      if (ex.generator.args && Object.keys(ex.generator.args).length) { g.appendChild(document.createTextNode(" ")); g.appendChild(code(ex.generator.args)); }
+      g.appendChild(document.createTextNode("  → " + ex.generator.outputType));
+      fact(dl, "Generator", g);
+    }
+    if (ex.special) fact(dl, "Relay", ex.special.description);
+    if (ex.rule) fact(dl, "Rule", ex.rule.id + " (" + ex.rule.source + (ex.rule.pack ? ", pack " + ex.rule.pack : "") + ")" + (ex.rule.description ? ": " + ex.rule.description : ""));
+    if (ex.listRule && ex.kind !== "unavailable") fact(dl, "Shape", (ex.listRule.isList ? "list" : "single value") + " by " + ex.listRule.id + (ex.listRule.description ? ": " + ex.listRule.description : ""));
+    if (ex.entity) {
+      var ent = el("span");
+      ent.appendChild(code(ex.entity.identity));
+      ent.appendChild(document.createTextNode(ex.entity.shared == null ? "" : ex.entity.shared ? "  shared: the same entity wherever it is selected" : "  owned by its parent"));
+      fact(dl, "Entity", ent);
+      if (ex.entity.how && ex.entity.how.length) {
+        var ol = el("ol");
+        ol.style.margin = "0"; ol.style.paddingLeft = "1.2em";
+        ex.entity.how.forEach(function (h2) {
+          var t = h2.path + ": " + h2.via + (h2.index != null ? " [" + h2.index + "]" : "") + (h2.key != null ? " → key " + h2.key : "") + (h2.mode ? " (" + h2.mode + ")" : "") + (h2.size != null ? ", " + h2.size + " items" : "");
+          ol.appendChild(el("li", null, t));
+        });
+        fact(dl, "Reached via", ol);
+      }
+    }
+    if (ex.collection) fact(dl, "Collection", ex.collection.size + " items" + (ex.collection.members ? ", members " + ex.collection.members : "") + (ex.collection.window && ex.collection.window.total != null ? ", total " + ex.collection.window.total : ""));
+    if (ex.persona && ex.persona.slots) {
+      var ps = el("span");
+      ps.appendChild(document.createTextNode(ex.persona.type + ":" + ex.persona.key + " slots "));
+      ex.persona.slots.forEach(function (s, i) { if (i) ps.appendChild(document.createTextNode(", ")); var c = code(s.name); c.title = s.key; ps.appendChild(c); });
+      fact(dl, "Persona", ps);
+    }
+    if (ex.persona && ex.persona.pinned) fact(dl, "Persona pins", JSON.stringify(ex.persona.pinned));
+    if (ex.derivation) fact(dl, "Derivation", JSON.stringify(ex.derivation));
+    if (ex.nullRate) fact(dl, "nullRate", ex.nullRate.rate + ": draw " + ex.nullRate.draw.toFixed(4) + (ex.nullRate.hit ? " → null" : " → kept"));
+    if (ex.scenario) fact(dl, "Scenario", ex.scenario.names.join("+") + " (" + ex.scenario.source + "): " + ex.scenario.effect);
+    if (ex.pin) fact(dl, "Pin", ex.pin.entity + (ex.pin.field ? "." + ex.pin.field : "") + " (" + ex.pin.kind + ")");
+    if (ex.seed) fact(dl, "Seed", ex.seed.value + " (" + ex.seed.source + (ex.seed.at ? " at " + ex.seed.at : "") + ")");
+    if (ex.because) fact(dl, "Because", ex.because);
+    box.appendChild(dl);
+    if (ex.precedence && ex.precedence.length) {
+      var t = el("table", "prec");
+      var head = el("tr");
+      ["", "property", "source", "detail"].forEach(function (c) { head.appendChild(el("th", null, c)); });
+      t.appendChild(head);
+      ex.precedence.forEach(function (p) {
+        p.candidates.forEach(function (c) {
+          var tr = el("tr", c.wins ? "win" : "");
+          tr.appendChild(el("td", null, ""));
+          tr.appendChild(el("td", null, p.property));
+          tr.appendChild(el("td", null, c.source + (c.entry ? " " + c.entry + " (" + c.matches + ")" : "")));
+          tr.appendChild(el("td", "mono", (c.rule ? c.rule + " " : "") + (c.value !== undefined ? JSON.stringify(c.value) : "")));
+          t.appendChild(tr);
+        });
+      });
+      var wrap = el("div"); wrap.style.marginTop = "10px"; wrap.appendChild(el("div", "hint", "Precedence: directive, then spec (exact, *, **), then the name rules."));
+      wrap.appendChild(t);
+      box.appendChild(wrap);
+    }
+    var det = el("details");
+    det.appendChild(el("summary", null, "Raw explanation (JSON)"));
+    det.appendChild(el("pre", "out", pretty(ex)));
+    box.appendChild(det);
+  }
+
+  function selectToken(tok) {
+    var prev = document.querySelector(".tok.sel");
+    if (prev) prev.classList.remove("sel");
+    tok.classList.add("sel");
+    explainPath(JSON.parse(tok.getAttribute("data-path")));
+  }
+
+  $("output").addEventListener("click", function (e) {
+    var t = e.target.closest ? e.target.closest(".tok") : null;
+    if (t) selectToken(t);
+  });
+  $("output").addEventListener("keydown", function (e) {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    var t = e.target.closest ? e.target.closest(".tok") : null;
+    if (t) { e.preventDefault(); selectToken(t); }
+  });
+
+  // ---- chrome: tabs, examples, scenarios, sharing
+  function tab(which) {
+    var out = which === "out";
+    $("tab-out").setAttribute("aria-selected", out);
+    $("tab-sdl").setAttribute("aria-selected", !out);
+    $("pane-out").hidden = !out;
+    $("pane-sdl").hidden = out;
+  }
+  $("tab-out").addEventListener("click", function () { tab("out"); });
+  $("tab-sdl").addEventListener("click", function () { tab("sdl"); });
+
+  SCENARIOS.forEach(function (n) {
+    var l = document.createElement("label");
+    var c = document.createElement("input");
+    c.type = "checkbox"; c.id = "sc-" + n; c.value = n;
+    l.appendChild(c); l.appendChild(document.createTextNode(n));
+    $("scenarios").appendChild(l);
+  });
+
+  var sel = $("example");
+  EXAMPLES.forEach(function (ex, i) { var o = document.createElement("option"); o.value = String(i); o.textContent = ex.name; sel.appendChild(o); });
+  sel.addEventListener("change", function () { setState(EXAMPLES[Number(sel.value)]); run(); });
+
+  var timer = null;
+  function later() { clearTimeout(timer); timer = setTimeout(run, 150); }
+  ["query", "spec", "options", "seed", "schema", "pins"].forEach(function (id) { $(id).addEventListener("input", later); });
+  $("useWorld").addEventListener("change", run);
+  SCENARIOS.forEach(function (n) { $("sc-" + n).addEventListener("change", run); });
+
+  $("share").addEventListener("click", function () {
+    var url = location.href.split("#")[0] + "#" + encodeState();
+    try { history.replaceState(null, "", url); } catch (e) { /* ignore */ }
+    var done = function () { $("share").textContent = "Copied"; setTimeout(function () { $("share").textContent = "Copy link"; }, 1200); };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(done, function () { window.prompt("Copy this link", url); });
+    else done();
+  });
+
+  if (!G) {
+    fail(new Error("graceholder.js did not load. Keep it next to index.html (playground/graceholder.js)."));
+    return;
+  }
+  var initial = decodeState(location.hash);
+  if (initial) {
+    // a shared link carries the editor texts
+    $("query").value = initial.query || "";
+    $("spec").value = initial.spec || "";
+    $("options").value = initial.options || "";
+    $("seed").value = initial.seed || "";
+    $("schema").value = initial.schema || "";
+    $("useWorld").checked = !!initial.world;
+    $("pins").value = initial.pins || "";
+    SCENARIOS.forEach(function (n) { $("sc-" + n).checked = (initial.scenario || []).indexOf(n) >= 0; });
+    $("more").open = !!(initial.schema || initial.world);
+  } else {
+    setState(EXAMPLES[0]);
+  }
+  run();
+})();
+</script>
+</body>
+</html>

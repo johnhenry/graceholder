@@ -1,0 +1,106 @@
+{
+  "path": "users.1.postCount",
+  "value": 6,
+  "kind": "scalar",
+  "field": {
+    "name": "postCount",
+    "parentType": "User",
+    "path": "users.postCount",
+    "type": "Int",
+    "list": false,
+    "nullable": false
+  },
+  "entity": {
+    "identity": "User:2",
+    "type": "User",
+    "key": "2",
+    "shared": true,
+    "how": [
+      {
+        "path": "users",
+        "field": "users",
+        "via": "list",
+        "index": 1,
+        "key": "2",
+        "shared": true,
+        "size": 5,
+        "window": {
+          "start": 1,
+          "total": null,
+          "endless": true
+        },
+        "countKey": "gh1\u001fs\u001fl\u001fQuery\u001fQuery\u001fusers"
+      }
+    ]
+  },
+  "derivation": {
+    "kind": "count.of",
+    "of": "posts",
+    "size": 6
+  },
+  "generator": {
+    "name": "count.of",
+    "args": {
+      "of": "posts"
+    },
+    "outputType": "Int"
+  },
+  "seed": {
+    "value": "s",
+    "source": "option"
+  },
+  "rule": {
+    "id": "C-count",
+    "source": "heuristic",
+    "description": "a count of a sibling collection (<x>Count, total<X>s)"
+  },
+  "listRule": {
+    "id": "L6",
+    "source": "default",
+    "description": "no list rule matched: a single value",
+    "isList": false
+  },
+  "decisions": [
+    {
+      "kind": "list",
+      "value": false,
+      "source": "default",
+      "rule": "L6"
+    },
+    {
+      "kind": "scalar",
+      "value": "Int",
+      "source": "heuristic",
+      "rule": "C-count"
+    }
+  ],
+  "precedence": [
+    {
+      "property": "gen",
+      "winner": "heuristic",
+      "candidates": [
+        {
+          "source": "heuristic",
+          "rule": "T8",
+          "value": "int",
+          "description": "integer-like name (count, age, quantity, views...)",
+          "wins": true
+        }
+      ]
+    },
+    {
+      "property": "list",
+      "winner": "heuristic",
+      "candidates": [
+        {
+          "source": "heuristic",
+          "rule": "L6",
+          "value": false,
+          "description": "no list rule matched: a single value",
+          "wins": true
+        }
+      ]
+    }
+  ],
+  "summary": "users.1.postCount = 6: derived (count.of), chosen by rule C-count (heuristic), on entity User:2 (shared)."
+}

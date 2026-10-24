@@ -1,0 +1,141 @@
+{
+  "path": "user.nick",
+  "value": 7,
+  "kind": "scalar",
+  "field": {
+    "name": "nick",
+    "parentType": "User",
+    "path": "user.nick",
+    "type": "Int",
+    "list": false,
+    "nullable": false
+  },
+  "entity": {
+    "identity": "User:1",
+    "type": "User",
+    "key": "1",
+    "shared": true,
+    "how": [
+      {
+        "path": "user",
+        "field": "user",
+        "via": "entity",
+        "mode": "root",
+        "key": "1",
+        "shared": true,
+        "note": "a root field is entity 1"
+      }
+    ]
+  },
+  "key": {
+    "string": "gh1\u001fs\u001fe\u001fUser\u001f1\u001fnick",
+    "parts": [
+      "gh1",
+      "s",
+      "e",
+      "User",
+      "1",
+      "nick"
+    ],
+    "hash": "0xd7ddaef00c4671a5"
+  },
+  "generator": {
+    "name": "int",
+    "args": {
+      "min": 1,
+      "max": 9
+    },
+    "outputType": "Int"
+  },
+  "seed": {
+    "value": "s",
+    "source": "option"
+  },
+  "rule": {
+    "id": "gen",
+    "source": "spec",
+    "description": "generator given by @gen, @pattern, @pick or a spec entry"
+  },
+  "listRule": {
+    "id": "L6",
+    "source": "default",
+    "description": "no list rule matched: a single value",
+    "isList": false
+  },
+  "decisions": [
+    {
+      "kind": "list",
+      "value": false,
+      "source": "default",
+      "rule": "L6"
+    },
+    {
+      "kind": "scalar",
+      "value": "Int",
+      "source": "spec",
+      "rule": "gen"
+    }
+  ],
+  "precedence": [
+    {
+      "property": "gen",
+      "winner": "spec",
+      "candidates": [
+        {
+          "source": "spec",
+          "entry": "user.nick",
+          "matches": "exact",
+          "value": {
+            "name": "int",
+            "args": {
+              "min": 1,
+              "max": 9
+            }
+          },
+          "wins": true
+        },
+        {
+          "source": "spec",
+          "entry": "*.nick",
+          "matches": "*",
+          "value": {
+            "name": "slug",
+            "args": {}
+          },
+          "wins": false
+        },
+        {
+          "source": "spec",
+          "entry": "**.nick",
+          "matches": "**",
+          "value": {
+            "name": "color",
+            "args": {}
+          },
+          "wins": false
+        },
+        {
+          "source": "heuristic",
+          "rule": "T13",
+          "value": "words",
+          "description": "no name rule matched: two words",
+          "wins": false
+        }
+      ]
+    },
+    {
+      "property": "list",
+      "winner": "heuristic",
+      "candidates": [
+        {
+          "source": "heuristic",
+          "rule": "L6",
+          "value": false,
+          "description": "no list rule matched: a single value",
+          "wins": true
+        }
+      ]
+    }
+  ],
+  "summary": "user.nick = 7: int({\"min\":1,\"max\":9}), chosen by rule gen (spec), on entity User:1 (shared)."
+}

@@ -1,0 +1,123 @@
+{
+  "path": "user.handle",
+  "value": "lucas",
+  "kind": "scalar",
+  "field": {
+    "name": "handle",
+    "parentType": "User",
+    "path": "user.handle",
+    "type": "String",
+    "list": false,
+    "nullable": false
+  },
+  "entity": {
+    "identity": "User:1",
+    "type": "User",
+    "key": "1",
+    "shared": true,
+    "how": [
+      {
+        "path": "user",
+        "field": "user",
+        "via": "entity",
+        "mode": "root",
+        "key": "1",
+        "shared": true,
+        "note": "a root field is entity 1"
+      }
+    ]
+  },
+  "derivation": {
+    "kind": "derive",
+    "from": "firstName",
+    "as": "person.username",
+    "sourceKey": "gh1\u001fs\u001fe\u001fUser\u001f1\u001ffirstName",
+    "sourceGenerator": "person.first"
+  },
+  "key": {
+    "string": "gh1\u001fs\u001fe\u001fUser\u001f1\u001ffirstName",
+    "parts": [
+      "gh1",
+      "s",
+      "e",
+      "User",
+      "1",
+      "firstName"
+    ],
+    "hash": "0xa279df33dce6bb4f"
+  },
+  "generator": {
+    "name": "person.username",
+    "args": {},
+    "outputType": "String"
+  },
+  "seed": {
+    "value": "s",
+    "source": "option"
+  },
+  "rule": {
+    "id": "derive",
+    "source": "directive",
+    "description": "derived from another field of the same entity"
+  },
+  "listRule": {
+    "id": "L6",
+    "source": "default",
+    "description": "no list rule matched: a single value",
+    "isList": false
+  },
+  "decisions": [
+    {
+      "kind": "list",
+      "value": false,
+      "source": "default",
+      "rule": "L6"
+    },
+    {
+      "kind": "scalar",
+      "value": "String",
+      "source": "directive",
+      "rule": "derive"
+    }
+  ],
+  "precedence": [
+    {
+      "property": "gen",
+      "winner": "heuristic",
+      "candidates": [
+        {
+          "source": "heuristic",
+          "rule": "T11",
+          "value": "person.username",
+          "description": "a named string kind (name, city, status, bio, slug...)",
+          "wins": true
+        }
+      ]
+    },
+    {
+      "property": "list",
+      "winner": "heuristic",
+      "candidates": [
+        {
+          "source": "heuristic",
+          "rule": "L6",
+          "value": false,
+          "description": "no list rule matched: a single value",
+          "wins": true
+        }
+      ]
+    },
+    {
+      "property": "derive",
+      "winner": "directive",
+      "candidates": [
+        {
+          "source": "directive",
+          "value": "firstName",
+          "wins": true
+        }
+      ]
+    }
+  ],
+  "summary": "user.handle = \"lucas\": derived (derive), chosen by rule derive (directive), on entity User:1 (shared)."
+}

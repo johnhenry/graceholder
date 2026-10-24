@@ -108,7 +108,7 @@ const slugify = (v) => String(v).toLowerCase().replace(/[^a-z0-9]+/g, "-").repla
 
 /**
  * @param {{ sdl: string, document: any, model: Map<string, Map<string, any>>, abstracts: Map<string, any>, opSeed?: string, schema?: import("graphql").GraphQLSchema, rootType?: string }} inferred
- * @param {{ seed: string|number, anchorMs: number, locale?: string, variables?: Record<string, unknown>, poolSize?: number, endlessTotal?: number, errorRate?: number, world?: any, trace?: (path: any, value: any) => void, images?: "url"|"svg", packs?: any[], realistic?: boolean }} opts
+ * @param {{ seed: string|number, anchorMs: number, locale?: string, variables?: Record<string, unknown>, poolSize?: number, endlessTotal?: number, errorRate?: number, world?: any, trace?: (path: any, value: any) => void, images?: "url"|"svg", packs?: any[], realistic?: boolean, probe?: { target: Array<string|number>, events: any[], notes: any[] } }} opts
  * @returns {import("graphql").ExecutionResult}
  */
 export function run(inferred, opts) {
@@ -128,10 +128,29 @@ export function run(inferred, opts) {
   const errorRate = opts.errorRate ?? DEFAULT_ERROR_RATE;
   /** how many lists enclose the field being resolved (resolvers run one at a time, so this is safe to share) */
   let curDepth = 0;
+  // explain() (src/explain.js) asks for a trace of how one value came about. `probe` is absent in normal runs,
+  // and every `note` call below only records: it never changes a value, a key or the order of any draw.
+  const probe = opts.probe;
+  /** @type {any} */
+  let note = null;
+  let noteDepth = 0;
 
   const K = (seed, scope, typeName, entityKey, fieldName, subKeys) => ({ seed, scope, typeName, entityKey, fieldName, subKeys });
   const sub = (argsKey) => (argsKey ? [argsKey] : undefined);
   const fieldOf = (type, name) => inferred.model.get(type)?.get(name);
+  /** The keys of a graphql-js response path, outermost first. */
+  const pathKeys = (path) => {
+    const out = [];
+    for (let p = path; p; p = p.prev) out.unshift(p.key);
+    return out;
+  };
+  /** The part of a field's model entry that explain() reports. */
+  const probeField = (f) => ({
+    kind: f.kind, list: Boolean(f.list), connection: Boolean(f.connection), typeName: f.typeName, sdl: f.sdl, gen: f.gen, genArgs: f.genArgs, nullRate: f.nullRate,
+    count: f.count, scenario: f.scenario, own: f.own, shared: f.shared, keyArgs: f.keyArgs, special: f.special, abstract: Boolean(f.abstract), derive: f.derive, seed: f.seed, nullable: f.nullable, name: f.name,
+  });
+  /** Are the members of a collection shared (drawn from the pool of their type) or owned by their parent? */
+  const sharedMembers = (f, parent) => (f.own ? false : f.shared ?? parent === ROOT);
 
   /** Collection size: a declared @count/spec count, else a keyed 3 to 10. */
   const count = (seed, parent, entityKey, fieldName, argsKey) => {
@@ -148,15 +167,34 @@ export function run(inferred, opts) {
 
   /** Generate one scalar; `personaKey` is the entity whose persona slots the generator reads. */
   const scalar = (seed, f, parent, entityKey, fieldName, subKeys, personaKey = entityKey, extra = {}) => {
-    if (fieldName === "qty") fieldName = "quantity"; // one latent quantity per item, whichever name is selected
+    if (fieldName === "qty") {
+      fieldName = "quantity"; // one latent quantity per item, whichever name is selected
+      note?.({ step: "latent-quantity", depth: noteDepth });
+    }
     if (ws) {
       const o = worldValue(parent, entityKey, fieldName);
-      if (o.has) return o.value;
+      if (o.has) {
+        note?.({ step: "world-value", depth: noteDepth, type: parent, key: entityKey, field: fieldName, value: o.value, kind: o.kind });
+        return o.value;
+      }
     }
-    if (f.derive !== undefined) return derived(seed, f, parent, entityKey, fieldName, subKeys, personaKey, extra);
-    if (f.gen === "count.of") return siblingView(seed, parent, entityKey, f.genArgs.of, fieldOf(parent, f.genArgs.of)).size;
-    if (f.gen.startsWith("order.")) return orderMoney(seed, f.gen, parent, entityKey);
-    return generate(f.gen, genCtx(seed, f, parent, entityKey, fieldName, subKeys, personaKey, extra));
+    if (f.derive !== undefined) {
+      note?.({ step: "derive", depth: noteDepth, from: f.derive, gen: f.gen, type: parent, key: entityKey });
+      return derived(seed, f, parent, entityKey, fieldName, subKeys, personaKey, extra);
+    }
+    if (f.gen === "count.of") {
+      const size = siblingView(seed, parent, entityKey, f.genArgs.of, fieldOf(parent, f.genArgs.of)).size;
+      note?.({ step: "count.of", depth: noteDepth, of: f.genArgs.of, size });
+      return size;
+    }
+    if (f.gen.startsWith("order.")) {
+      note?.({ step: "order", depth: noteDepth, gen: f.gen });
+      return orderMoney(seed, f.gen, parent, entityKey);
+    }
+    const ctx = genCtx(seed, f, parent, entityKey, fieldName, subKeys, personaKey, extra);
+    const out = generate(f.gen, ctx);
+    note?.({ step: "generate", depth: noteDepth, gen: f.gen, args: f.genArgs, key: K(seed, "e", parent, entityKey, fieldName, subKeys), personaKey, personaType: extra.personaType ?? parent, pinned: ctx.pinned });
+    return out;
   };
 
   /** A pinned or mutated value of one field of one entity (docs/design.md section 16, World). */
@@ -164,9 +202,9 @@ export function run(inferred, opts) {
     const rec = ws.entity(parent, entityKey);
     if (!rec) return NO_VALUE;
     const name = fieldName === "quantity" || fieldName === "qty" ? "quantity" : fieldName;
-    if (Object.hasOwn(rec.fields, name)) return { has: true, value: rec.fields[name] };
-    if (rec.created && CREATED_FIELDS.has(name)) return { has: true, value: anchorIso };
-    if ((rec.created || rec.updated) && UPDATED_FIELDS.has(name)) return { has: true, value: anchorIso };
+    if (Object.hasOwn(rec.fields, name)) return { has: true, value: rec.fields[name], kind: "pin" };
+    if (rec.created && CREATED_FIELDS.has(name)) return { has: true, value: anchorIso, kind: "created" };
+    if ((rec.created || rec.updated) && UPDATED_FIELDS.has(name)) return { has: true, value: anchorIso, kind: "updated" };
     return NO_VALUE;
   };
 
@@ -202,7 +240,13 @@ export function run(inferred, opts) {
   const genCtx = (seed, f, parent, entityKey, fieldName, subKeys, personaKey, extra = {}) => ({
     pinned: ws ? personaPins(extra.personaType ?? parent, personaKey) : undefined,
     stream: keyStream(K(seed, "e", parent, entityKey, fieldName, subKeys)),
-    slot: (name) => keyStream(K(seed, "p", extra.personaType ?? parent, personaKey, name)),
+    slot: note
+      ? (name) => {
+          const key = K(seed, "p", extra.personaType ?? parent, personaKey, name);
+          note({ step: "slot", name, key });
+          return keyStream(key);
+        }
+      : (name) => keyStream(K(seed, "p", extra.personaType ?? parent, personaKey, name)),
     series: extra.series && { i: extra.series.i, n: extra.series.n, slot: (name) => keyStream(K(seed, "p", parent, extra.series.key, name)) },
     images: opts.images,
     packs,
@@ -224,7 +268,9 @@ export function run(inferred, opts) {
   /** @derive: the source field's value of the same entity, shaped by this field's own generator kind. */
   const derived = (seed, f, parent, entityKey, fieldName, subKeys, personaKey, extra) => {
     const srcInfo = fieldOrDefault(parent, f.derive);
+    noteDepth++;
     const value = scalar(seed, srcInfo, parent, entityKey, f.derive, undefined, personaKey, extra);
+    noteDepth--;
     if (value === null || value === undefined) return value;
     if (f.gen === "slug") return slugify(value);
     if (f.gen === "person.username") return asciiFold(String(value));
@@ -251,11 +297,16 @@ export function run(inferred, opts) {
     // or nothing is selected), so aggregates never depend on the selection
     const qty = fieldOrDefault(itemType, "quantity", "qty");
     let subCents = 0;
+    const outer = note;
+    note = null; // the items are an input, not the subject: only a summary is noted
     for (let i = 1; i <= n; i++) {
       const member = keyOf(i);
       subCents += Math.round(scalar(seed, price, itemType, member, "price") * 100) * scalar(seed, qty, itemType, member, "quantity");
     }
-    const taxCents = Math.round((subCents * keyStream(K(seed, "p", parent, entityKey, "taxRate")).int(0, 12)) / 100);
+    note = outer;
+    const taxPercent = keyStream(K(seed, "p", parent, entityKey, "taxRate")).int(0, 12);
+    const taxCents = Math.round((subCents * taxPercent) / 100);
+    note?.({ step: "order-detail", depth: noteDepth, items: n, itemsField: itemsName, itemType, taxPercent, taxKey: K(seed, "p", parent, entityKey, "taxRate"), subtotalCents: subCents });
     if (gen === "order.subtotal") return subCents / 100;
     if (gen === "order.tax") return taxCents / 100;
     return (subCents + taxCents) / 100;
@@ -351,9 +402,12 @@ export function run(inferred, opts) {
     const wantUnicode = sc.includes("unicode") && text;
     const wantBoundary = sc.includes("boundary") && !f.gen?.startsWith("id.") && (f.sdl === "Int" || f.sdl === "Float" || f.sdl === "DateTime" || text);
     if (!wantUnicode && !wantBoundary) return value;
-    const stream = keyStream(K(seed, "e", parent, entityKey, fieldName, ["~scenario", `edge${index}`]));
-    if (wantUnicode && (!wantBoundary || stream.bool(0.5))) return unicodeValue(stream);
-    return boundaryValue(f.sdl, stream);
+    const key = K(seed, "e", parent, entityKey, fieldName, ["~scenario", `edge${index}`]);
+    const stream = keyStream(key);
+    const unicode = wantUnicode && (!wantBoundary || stream.bool(0.5));
+    const out = unicode ? unicodeValue(stream) : boundaryValue(f.sdl, stream);
+    note?.({ step: "scenario-edge", mode: unicode ? "unicode" : "boundary", key, replaced: value });
+    return out;
   };
 
   const fieldResolver = (source, args, _ctx, info) => {
@@ -365,6 +419,26 @@ export function run(inferred, opts) {
     for (let p = info.path; p; p = p.prev) if (typeof p.key === "number") curDepth++;
     const entityKey = source.entityKey;
     const seed = f.seed ?? source.seed ?? rootSeed;
+    // explain(): where is this field relative to the value being explained?
+    note = null;
+    let pr = 0; // 1 an ancestor of the target, 2 the target, 3 the target is an element of this scalar list
+    let probeIndex;
+    if (probe) {
+      const at = pathKeys(info.path);
+      const t = probe.target;
+      const same = (n) => at.slice(0, n).every((k, i) => String(k) === String(t[i]));
+      if (at.length === t.length && same(at.length)) pr = 2;
+      else if (at.length < t.length && same(at.length)) pr = 1;
+      if (pr === 1 && f.kind === "scalar" && f.list && at.length === t.length - 1) pr = 3;
+      if (pr) {
+        probeIndex = Number.isInteger(Number(t[at.length])) ? Number(t[at.length]) : undefined;
+        probe.events.push({ type: "field", rel: ["", "ancestor", "self", "element"][pr], path: at, parent, fieldName, entityKey, seed, rootSeed, persona: source.persona ?? null, f: probeField(f), args });
+        if (pr === 2) note = (e) => probe.notes.push(e);
+        // what an ancestor decided about itself (a scenario error, a nullRate hit, ...) explains why the target is missing
+        else if (pr === 1) note = (e) => probe.events.push({ type: "ancestor-note", path: at, ...e });
+      }
+    }
+    const mark = (e) => { if (pr && probe) probe.events.push(e); };
     const ref = (typeName, key, extra) => ({ typeName, entityKey: key, seed, ...extra });
     // a geo-style child shares the persona of the entity that owns it (see `inherits`)
     const personaOf = source.persona ?? { type: parent, key: entityKey };
@@ -373,16 +447,20 @@ export function run(inferred, opts) {
     switch (f.special) {
       case "edges": {
         const c = source.conn;
+        mark({ type: "collection", style: "edges", start: c.start, count: c.count, total: c.total, endless: c.endless, childKey: probeIndex === undefined ? undefined : c.memberKey(c.start + probeIndex) });
         return Array.from({ length: c.count }, (_, k) => ({ typeName: f.typeName, entityKey, seed, index: c.start + k, itemKey: c.memberKey(c.start + k) }));
       }
       case "nodes": {
         const c = source.conn;
+        mark({ type: "collection", style: "nodes", start: c.start, count: c.count, total: c.total, endless: c.endless, childKey: probeIndex === undefined ? undefined : c.memberKey(c.start + probeIndex) });
         return Array.from({ length: c.count }, (_, k) => ref(f.typeName, c.memberKey(c.start + k)));
       }
       case "pageInfo": return { typeName: f.typeName, entityKey, seed, conn: source.conn };
       case "totalCount": return source.conn.total ?? endlessTotal;
       case "cursor": return encodeCursor(source.index);
-      case "edgeNode": return ref(f.typeName, source.itemKey);
+      case "edgeNode":
+        mark({ type: "entity", mode: "connection-member", key: source.itemKey });
+        return ref(f.typeName, source.itemKey);
       case "pageInfoField": {
         const c = source.conn;
         const end = c.start + c.count - 1;
@@ -396,29 +474,53 @@ export function run(inferred, opts) {
 
     const sc = f.scenario;
     if (sc?.includes("errors") && f.name !== "id") {
-      const stream = keyStream(K(seed, "e", parent, entityKey, fieldName, ["~scenario", "error"]));
-      if (stream.float() < errorRate) throw new ScenarioError(stream);
+      const key = K(seed, "e", parent, entityKey, fieldName, ["~scenario", "error"]);
+      const stream = keyStream(key);
+      const draw = stream.float();
+      note?.({ step: "scenario-errors", key, draw, rate: errorRate, hit: draw < errorRate });
+      if (draw < errorRate) throw new ScenarioError(stream);
     }
-    if (sc?.includes("nulls") && !isNonNullType(info.returnType)) return null;
+    if (sc?.includes("nulls") && !isNonNullType(info.returnType)) {
+      note?.({ step: "scenario-nulls" });
+      return null;
+    }
     if (ws && f.kind === "scalar") {
       const o = worldValue(parent, entityKey, fieldName);
-      if (o.has) return o.value;
+      if (o.has) {
+        note?.({ step: "world-value", depth: 0, type: parent, key: entityKey, field: fieldName, value: o.value, kind: o.kind });
+        return o.value;
+      }
     }
-    if (f.nullRate !== undefined && keyStream(K(seed, "e", parent, entityKey, fieldName, ["null"])).float() < f.nullRate) return null;
+    if (f.nullRate !== undefined) {
+      const key = K(seed, "e", parent, entityKey, fieldName, ["null"]);
+      const draw = keyStream(key).float();
+      note?.({ step: "nullRate", key, draw, rate: f.nullRate, hit: draw < f.nullRate });
+      if (draw < f.nullRate) return null;
+    }
 
     const argsKey = argsKeyOf(args);
     if (f.kind === "scalar") {
       const own = source.persona ? { personaType: source.persona.type } : {};
       if (!f.list) return edge(f, scalar(seed, f, parent, entityKey, fieldName, sub(argsKey), source.persona?.key ?? entityKey, { ...own, series: source.series && { ...source.series } }), seed, parent, entityKey, fieldName, "");
       const n = count(seed, parent, entityKey, fieldName, argsKey);
-      return Array.from({ length: n }, (_, i) => edge(f, scalar(seed, f, parent, entityKey, fieldName, argsKey ? [argsKey, i] : [i], `${entityKey}.${fieldName}.${i + 1}`), seed, parent, entityKey, fieldName, i));
+      mark({ type: "scalar-list", count: n, countKey: K(seed, "l", parent, entityKey, fieldName, sub(argsKey)), declared: f.count ?? null });
+      return Array.from({ length: n }, (_, i) => {
+        if (pr === 3 && i === probeIndex && probe) note = (e) => probe.notes.push(e);
+        try {
+          return edge(f, scalar(seed, f, parent, entityKey, fieldName, argsKey ? [argsKey, i] : [i], `${entityKey}.${fieldName}.${i + 1}`), seed, parent, entityKey, fieldName, i);
+        } finally {
+          if (pr === 3) note = null;
+        }
+      });
     }
     if (f.connection) {
       const conn = collection(seed, f, parent, entityKey, fieldName, args);
+      mark({ type: "collection", style: "connection", start: conn.start, count: conn.count, total: conn.total, endless: conn.endless, declared: f.count ?? null, countKey: K(seed, "l", parent, entityKey, fieldName, sub(argsKey)), shared: sharedMembers(f, parent), argsKey });
       return { typeName: f.typeName, entityKey: `${entityKey}.${fieldName}`, seed, conn };
     }
     if (f.list) {
       const c = collection(seed, f, parent, entityKey, fieldName, args);
+      mark({ type: "collection", style: "list", start: c.start, count: c.count, total: c.total, endless: c.endless, declared: f.count ?? null, countKey: K(seed, "l", parent, entityKey, fieldName, sub(argsKey)), shared: sharedMembers(f, parent), argsKey, childKey: probeIndex === undefined ? undefined : c.memberKey(c.start + probeIndex), index: probeIndex });
       if (realistic && isSeriesType(f.typeName)) {
         // one series per owning entity, field and filter; each point knows its position and the series length
         const n = count(seed, parent, entityKey, fieldName, argsKey);
@@ -436,6 +538,10 @@ export function run(inferred, opts) {
       (f.own || (child && parent !== ROOT)
         ? `${entityKey}.${fieldName}`
         : parent === ROOT ? "1" : String(keyStream(K(seed, "l", parent, entityKey, fieldName, sub(argsKey))).int(1, poolSize)));
+    if (pr) {
+      const mode = selected !== undefined ? "args" : f.own ? "owned" : child && parent !== ROOT ? "inherited" : parent === ROOT ? "root" : "pool";
+      mark({ type: "entity", mode, key: k, keyArgs: f.keyArgs ?? null, args, poolSize, poolKey: mode === "pool" ? K(seed, "l", parent, entityKey, fieldName, sub(argsKey)) : undefined, deleted: Boolean(ws && !f.abstract && ws.isDeleted(f.typeName, k)) });
+    }
     if (ws && !f.abstract && ws.isDeleted(f.typeName, k)) return null;
     return ref(f.typeName, k, selected === undefined && parent !== ROOT ? child : undefined);
   };

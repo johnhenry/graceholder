@@ -1,4 +1,7 @@
 import type { DocumentNode, GraphQLError, GraphQLSchema, IntrospectionQuery } from "graphql";
+import type { ResultOf, ItemOf } from "./typed.js";
+
+export type { ResultOf, ItemOf };
 
 /** Key-scheme version literal (frozen at 1.0.0). */
 export declare const KEY_SCHEME: "gh1";
@@ -132,14 +135,22 @@ export type Spec = { [path: string]: FieldSpec | { poolSize?: number; endlessTot
 
 export type Data = Record<string, unknown>;
 
-export interface ResultMode {
-  data?: Data;
+export interface ResultMode<D = Data> {
+  data?: D;
   errors?: readonly GraphQLError[] | ResultError[];
 }
 
-/** Generate data for a query. Synchronous; same inputs give byte-identical output. */
-export declare function graceholder(query: string | DocumentNode, options?: Options & { errors?: "throw" }): Data;
-export declare function graceholder(query: string | DocumentNode, options: Options & { errors: "result" }): ResultMode;
+/**
+ * Generate data for a query. Synchronous; same inputs give byte-identical output.
+ *
+ * When `query` is a string literal the result is typed from the query text (see {@link ResultOf}:
+ * selection sets, aliases, lists, nested lists, fragments, unions, connections and scalar types by
+ * field name). A `string` that is not a literal, or a parsed document, gives `Record<string, unknown>`.
+ */
+export declare function graceholder<Q extends string>(query: Q, options?: Options & { errors?: "throw" }): ResultOf<Q>;
+export declare function graceholder<Q extends string>(query: Q, options: Options & { errors: "result" }): ResultMode<ResultOf<Q>>;
+export declare function graceholder(query: DocumentNode, options?: Options & { errors?: "throw" }): Data;
+export declare function graceholder(query: DocumentNode, options: Options & { errors: "result" }): ResultMode;
 export declare function graceholder(query: string | DocumentNode, options: Options): Data | ResultMode;
 
 export interface Decision {
@@ -188,6 +199,7 @@ export type ErrorCode =
   | "bad-samples"
   | "unsupported"
   | "bad-mutation"
+  | "bad-path"
   | "not-found"
   | "graphql"
   | "internal";
@@ -257,20 +269,24 @@ export interface WorldOptions {
   log?: WorldEntry[];
 }
 
-export interface WorldResult {
-  data?: Data | null;
+export interface WorldResult<D = Data> {
+  data?: D | null;
   errors?: Array<{ message: string; locations?: Array<{ line: number; column: number }>; path?: Array<string | number>; extensions?: Record<string, unknown> }>;
 }
 
 export interface World {
   /** Run a query or a mutation. Never throws for a bad operation: failures come back as `errors`. */
-  query(query: string | DocumentNode, options?: { variables?: Record<string, unknown>; operationName?: string }): WorldResult;
+  query<Q extends string>(query: Q, options?: { variables?: Record<string, unknown>; operationName?: string }): WorldResult<ResultOf<Q>>;
+  query(query: DocumentNode, options?: { variables?: Record<string, unknown>; operationName?: string }): WorldResult;
   /** The root collection of a query as a lazy iterable (see {@link stream}); reflects pins and mutations when each window is generated. */
+  stream<Q extends string, F extends string | undefined = undefined>(query: Q, options?: Omit<StreamOptions, keyof Options> & Pick<Options, "variables" | "operationName"> & { field?: F }): Stream<ItemOf<Q, F>>;
   stream(query: string | DocumentNode, options?: Omit<StreamOptions, keyof Options> & Pick<Options, "variables" | "operationName">): Stream;
   /** Override fields of the entity `"Type:key"`. */
   pin(ref: string, fields: Record<string, unknown>): World;
   export(): ExportedWorld;
   reset(): World;
+  /** Like the top-level {@link explain}, for this world. */
+  explain(query: string | DocumentNode, path: string | Array<string | number>, options?: Omit<Options, "errors" | "seed" | "spec" | "anchorDate" | "locale">): Explanation;
 }
 
 /** A persistent, deterministic world shared across queries. */
@@ -338,6 +354,7 @@ export interface Stream<T = Record<string, any>> extends Iterable<T>, AsyncItera
 }
 
 /** The root collection of a query as a lazy iterable of items, with bounded memory. */
+export declare function stream<Q extends string, F extends string | undefined = undefined>(query: Q, options?: StreamOptions & { field?: F }): Stream<ItemOf<Q, F>>;
 export declare function stream<T = Record<string, any>>(query: string | DocumentNode, options?: StreamOptions): Stream<T>;
 
 /** One compact JSON document per item, each followed by a newline. A sync source gives a sync generator. */
@@ -405,3 +422,86 @@ export interface SqlWriter {
 export declare function sqlWriter(source: string | DocumentNode | Stream, options?: SqlOptions): SqlWriter;
 /** SQL (DDL, INSERTs, COMMIT) for the root collection of a query and everything under it, as statements. */
 export declare function toSQL(source: string | DocumentNode | Stream, options?: SqlOptions): Generator<string>;
+
+// ---- explain (docs/design.md section 20) ---------------------------------------------------------
+
+/** A key as the library builds it for a value: the exact string (fields are separated by U+001F), its parts and its XXH64 hash. */
+export interface ExplainedKey {
+  string: string;
+  parts: string[];
+  hash: string;
+}
+
+export interface ExplainedStep {
+  path: string;
+  field: string;
+  /** `list`, `edges`, `nodes`, `connection` (a collection) or `entity` (a singular field). */
+  via: string;
+  mode?: "args" | "root" | "pool" | "owned" | "inherited" | "connection-member";
+  index?: number;
+  /** The entity key (a list member, or the entity a singular field refers to). */
+  key?: string;
+  /** Drawn from the shared pool of the type (true) or owned by its parent (false). */
+  shared?: boolean;
+  size?: number;
+  window?: { start: number; total: number | null; endless: boolean };
+  countKey?: string;
+  declaredCount?: unknown;
+  note?: string;
+}
+
+export interface ExplainedCandidate {
+  source: "directive" | "spec" | "heuristic" | "schema";
+  /** For a spec candidate: the spec key and how it matched (`exact`, `*`, `**` or `@Type`). */
+  entry?: string;
+  matches?: string;
+  rule?: string;
+  value?: unknown;
+  description?: string;
+  /** True for the candidate that decided the property. */
+  wins: boolean;
+}
+
+/** What `explain` reports for a value (docs/api.md, explain). Every field is plain JSON. */
+export interface Explanation {
+  path: string;
+  /** The value in the output (absent when the path is `unavailable` or the field failed). */
+  value?: unknown;
+  kind: "scalar" | "scalar-list" | "list-element" | "object" | "list" | "connection" | "item" | "connection-member" | "unavailable";
+  /** For `unavailable`: the first null or failed value on the way, and why. */
+  blockedAt?: string;
+  because?: string;
+  by?: Record<string, unknown>;
+  error?: { message: string; extensions?: Record<string, unknown> };
+  field?: { name: string; alias?: string; parentType: string; path: string; type: string; list: boolean; nullable: boolean };
+  entity?: { identity: string; type: string; key: string; shared?: boolean; how: ExplainedStep[]; note?: string };
+  collection?: { size: number; window?: { start: number; total: number | null; endless: boolean }; declaredCount?: unknown; countKey?: string; members?: string };
+  key?: ExplainedKey;
+  generator?: { name: string; args: Record<string, unknown>; outputType: string };
+  rule?: { id: string; source: string; description?: string; pack?: string };
+  listRule?: { id: string; source: string; description?: string; isList: boolean };
+  decisions?: Array<{ kind: string; value: unknown; source: string; rule?: string }>;
+  precedence?: Array<{ property: string; winner: string | undefined; candidates: ExplainedCandidate[] }>;
+  persona?: { type: string; key: string; inherited?: boolean; slots?: Array<{ name: string; key: string }>; pinned?: Record<string, string> };
+  derivation?: { kind: "derive" | "count.of" | "order"; [k: string]: unknown };
+  nullRate?: { rate: number; draw: number; key: string; hit: boolean };
+  scenario?: { names: Scenario[]; source: "option" | "spec"; effect: string };
+  pin?: { entity: string; field?: string; kind: "pin" | "created" | "updated" | "deleted"; value: unknown };
+  /** The seed in effect and where it came from (`option`, `default`, `directive`, `spec`, `operation directive`, or an enclosing field). */
+  seed?: { value: string; source: string; at?: string };
+  /** For Relay machinery (`totalCount`, `cursor`, paging info), which has no generator of its own. */
+  special?: { name: string; description: string };
+  summary: string;
+}
+
+/**
+ * Explain why the value at `path` looks the way it does: its key string, generator and arguments, the rule,
+ * spec entry or directive that decided it (with the precedence), the persona slots or derivation inputs,
+ * the entity it belongs to, the scenario effect and any pin. The query is run once with a read-only trace:
+ * explaining never changes an output.
+ *
+ * `path` uses response keys (aliases) and zero-based list indexes: `users.3.email` or `["users", 3, "email"]`.
+ * Pass `{ world }` to explain a value of a world (pins and mutations are taken into account).
+ * @throws {GraceholderError} `bad-path` when the path names nothing in the result
+ */
+export declare function explain(query: string | DocumentNode, path: string | Array<string | number>, options?: Omit<Options, "errors"> & { world?: World }): Explanation;

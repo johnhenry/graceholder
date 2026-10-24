@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "skipLibCheck": false, "types": [] },
+  "include": ["src/typed.d.ts", "src/generator-types.d.ts"]
+}

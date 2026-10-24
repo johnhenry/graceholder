@@ -213,3 +213,23 @@ export function specProps(compiled, path, typeName, fieldName) {
   }
   return Object.fromEntries(Object.entries(best).map(([k, v]) => [k, v.value]));
 }
+
+/**
+ * Every spec entry that addresses a field, per property, best first (the first one is the winner of
+ * `specProps`). Unlike `specProps` it marks nothing as used. For explain().
+ * @returns {Record<string, Array<{ key: string, value: any, klass: "exact"|"*"|"**"|"@Type", index: number }>>}
+ */
+export function specTrace(compiled, path, typeName, fieldName) {
+  const byProp = {};
+  for (const entry of compiled.entries) {
+    if (!matchPath(entry, path, typeName, fieldName)) continue;
+    for (const prop of Object.keys(entry.props)) (byProp[prop] ??= []).push(entry);
+  }
+  /** @type {Record<string, any[]>} */
+  const out = {};
+  for (const [prop, entries] of Object.entries(byProp)) {
+    entries.sort((a, b) => (better(a, b) ? -1 : 1));
+    out[prop] = entries.map((e) => ({ key: e.key, value: e.props[prop], klass: e.typeName !== undefined ? "@Type" : ["**", "*", "exact"][e.klass], index: e.index }));
+  }
+  return out;
+}

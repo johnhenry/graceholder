@@ -1,0 +1,115 @@
+{
+  "path": "users.1.handle",
+  "value": "zed",
+  "kind": "scalar",
+  "field": {
+    "name": "handle",
+    "parentType": "User",
+    "path": "users.handle",
+    "type": "String",
+    "list": false,
+    "nullable": false
+  },
+  "entity": {
+    "identity": "User:2",
+    "type": "User",
+    "key": "2",
+    "shared": true,
+    "how": [
+      {
+        "path": "users",
+        "field": "users",
+        "via": "list",
+        "index": 1,
+        "key": "2",
+        "shared": true,
+        "size": 3,
+        "window": {
+          "start": 1,
+          "total": null,
+          "endless": true
+        },
+        "countKey": "gh1\u001fw\u001fl\u001fQuery\u001fQuery\u001fusers"
+      }
+    ]
+  },
+  "derivation": {
+    "kind": "derive",
+    "from": "firstName",
+    "as": "person.username"
+  },
+  "generator": {
+    "name": "person.username",
+    "args": {},
+    "outputType": "String"
+  },
+  "seed": {
+    "value": "w",
+    "source": "option"
+  },
+  "rule": {
+    "id": "derive",
+    "source": "directive",
+    "description": "derived from another field of the same entity"
+  },
+  "listRule": {
+    "id": "L6",
+    "source": "default",
+    "description": "no list rule matched: a single value",
+    "isList": false
+  },
+  "decisions": [
+    {
+      "kind": "list",
+      "value": false,
+      "source": "default",
+      "rule": "L6"
+    },
+    {
+      "kind": "scalar",
+      "value": "String",
+      "source": "directive",
+      "rule": "derive"
+    }
+  ],
+  "precedence": [
+    {
+      "property": "gen",
+      "winner": "heuristic",
+      "candidates": [
+        {
+          "source": "heuristic",
+          "rule": "T11",
+          "value": "person.username",
+          "description": "a named string kind (name, city, status, bio, slug...)",
+          "wins": true
+        }
+      ]
+    },
+    {
+      "property": "list",
+      "winner": "heuristic",
+      "candidates": [
+        {
+          "source": "heuristic",
+          "rule": "L6",
+          "value": false,
+          "description": "no list rule matched: a single value",
+          "wins": true
+        }
+      ]
+    },
+    {
+      "property": "derive",
+      "winner": "directive",
+      "candidates": [
+        {
+          "source": "directive",
+          "value": "firstName",
+          "wins": true
+        }
+      ]
+    }
+  ],
+  "summary": "users.1.handle = \"zed\": derived (derive), chosen by rule derive (directive), on entity User:2 (shared)."
+}

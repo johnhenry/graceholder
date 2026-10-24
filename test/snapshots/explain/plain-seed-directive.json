@@ -1,0 +1,120 @@
+{
+  "path": "user.name",
+  "value": "Uma Larsen",
+  "kind": "scalar",
+  "field": {
+    "name": "name",
+    "parentType": "User",
+    "path": "user.name",
+    "type": "String",
+    "list": false,
+    "nullable": false
+  },
+  "entity": {
+    "identity": "User:1",
+    "type": "User",
+    "key": "1",
+    "shared": true,
+    "how": [
+      {
+        "path": "user",
+        "field": "user",
+        "via": "entity",
+        "mode": "root",
+        "key": "1",
+        "shared": true,
+        "note": "a root field is entity 1"
+      }
+    ]
+  },
+  "key": {
+    "string": "gh1\u001fother\u001fe\u001fUser\u001f1\u001fname",
+    "parts": [
+      "gh1",
+      "other",
+      "e",
+      "User",
+      "1",
+      "name"
+    ],
+    "hash": "0x378799f6c1685169"
+  },
+  "generator": {
+    "name": "person.full",
+    "args": {},
+    "outputType": "String"
+  },
+  "persona": {
+    "type": "User",
+    "key": "1",
+    "slots": [
+      {
+        "name": "first",
+        "key": "gh1\u001fother\u001fp\u001fUser\u001f1\u001ffirst"
+      },
+      {
+        "name": "last",
+        "key": "gh1\u001fother\u001fp\u001fUser\u001f1\u001flast"
+      }
+    ]
+  },
+  "seed": {
+    "value": "other",
+    "source": "directive on an enclosing field",
+    "at": "user"
+  },
+  "rule": {
+    "id": "T11",
+    "source": "heuristic",
+    "description": "a named string kind (name, city, status, bio, slug...)"
+  },
+  "listRule": {
+    "id": "L6",
+    "source": "default",
+    "description": "no list rule matched: a single value",
+    "isList": false
+  },
+  "decisions": [
+    {
+      "kind": "list",
+      "value": false,
+      "source": "default",
+      "rule": "L6"
+    },
+    {
+      "kind": "scalar",
+      "value": "String",
+      "source": "heuristic",
+      "rule": "T11"
+    }
+  ],
+  "precedence": [
+    {
+      "property": "gen",
+      "winner": "heuristic",
+      "candidates": [
+        {
+          "source": "heuristic",
+          "rule": "T11",
+          "value": "person.full",
+          "description": "a named string kind (name, city, status, bio, slug...)",
+          "wins": true
+        }
+      ]
+    },
+    {
+      "property": "list",
+      "winner": "heuristic",
+      "candidates": [
+        {
+          "source": "heuristic",
+          "rule": "L6",
+          "value": false,
+          "description": "no list rule matched: a single value",
+          "wins": true
+        }
+      ]
+    }
+  ],
+  "summary": "user.name = \"Uma Larsen\": person.full(), chosen by rule T11 (heuristic), on entity User:1 (shared)."
+}

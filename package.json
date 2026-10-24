@@ -64,14 +64,17 @@
   "sideEffects": false,
   "scripts": {
     "lint": "node scripts/check-banned.mjs",
-    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.dts.json",
     "test": "node --test \"test/**/*.test.js\"",
     "test:golden": "node --test test/golden.test.js",
     "golden:update": "node scripts/update-golden.mjs",
     "check": "npm run lint && npm run typecheck && npm test",
-    "test:browser": "GRACEHOLDER_BROWSER=1 node --test test/browser.test.js",
+    "test:browser": "GRACEHOLDER_BROWSER=1 node --test test/browser.test.js test/playground.test.js",
     "stability": "node scripts/gen-stability.mjs",
-    "docs:update": "node scripts/docs.mjs --write"
+    "docs:update": "node scripts/docs.mjs --write",
+    "gen:types": "node scripts/gen-generator-types.mjs",
+    "playground:build": "node scripts/build-playground.mjs",
+    "playground:screenshot": "node scripts/playground-screenshot.mjs"
   },
   "author": "John Henry",
   "license": "MIT",

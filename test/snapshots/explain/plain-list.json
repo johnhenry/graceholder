@@ -1,0 +1,237 @@
+{
+  "path": "users",
+  "value": [
+    {
+      "id": "1",
+      "name": "Lucas Ziegler",
+      "email": "lucas.ziegler@example.com",
+      "age": 24,
+      "createdAt": "2021-01-19T10:59:10.337Z",
+      "tags": [
+        "lorem ea",
+        "velit ad",
+        "quas totam",
+        "aute sed",
+        "amet praesentium"
+      ],
+      "posts": [
+        {
+          "title": "Praesentium Nisi Accusamus Est Dolor Mollitia",
+          "author": {
+            "name": "Søren Underwood"
+          }
+        },
+        {
+          "title": "At Ex Amet Nulla Et",
+          "author": {
+            "name": "Farah Bennett"
+          }
+        }
+      ],
+      "postCount": 3
+    },
+    {
+      "id": "2",
+      "name": "Hector Tanaka",
+      "email": "hector.tanaka21@example.com",
+      "age": 64,
+      "createdAt": "2023-07-31T10:35:14.067Z",
+      "tags": [
+        "dolore aute",
+        "occaecat voluptatum",
+        "corrupti natus",
+        "consequat laboris"
+      ],
+      "posts": [
+        {
+          "title": "Incididunt Incididunt Deserunt Iste Provident",
+          "author": {
+            "name": "Tessa Novak"
+          }
+        },
+        {
+          "title": "Quas Occaecat Deleniti",
+          "author": {
+            "name": "Tessa Novak"
+          }
+        }
+      ],
+      "postCount": 6
+    },
+    {
+      "id": "3",
+      "name": "Anika Singh",
+      "email": "anika.singh@example.net",
+      "age": 82,
+      "createdAt": "2021-03-20T17:35:01.056Z",
+      "tags": [
+        "tempor consectetur",
+        "laborum sint",
+        "omnis velit",
+        "error enim",
+        "natus doloremque",
+        "et mollitia",
+        "do excepturi",
+        "occaecati esse",
+        "ipsum omnis"
+      ],
+      "posts": [
+        {
+          "title": "Cillum Esse Quos",
+          "author": {
+            "name": "Mei Łukasik"
+          }
+        },
+        {
+          "title": "Eos Vero Molestias",
+          "author": {
+            "name": "Yusuf Bauer"
+          }
+        }
+      ],
+      "postCount": 6
+    },
+    {
+      "id": "4",
+      "name": "Åsa Xu",
+      "email": "asa.xu@example.org",
+      "age": 45,
+      "createdAt": "2023-05-30T21:13:05.688Z",
+      "tags": [
+        "cupiditate ullamco",
+        "aliqua veniam",
+        "elit quos",
+        "qui quis",
+        "cillum est",
+        "totam minim",
+        "nisi natus"
+      ],
+      "posts": [
+        {
+          "title": "Voluptatem Excepturi Esse Quas",
+          "author": {
+            "name": "Sofia Garcia"
+          }
+        },
+        {
+          "title": "Occaecat Mollit Et Officia Corrupti",
+          "author": {
+            "name": "Yara Silva"
+          }
+        }
+      ],
+      "postCount": 8
+    },
+    {
+      "id": "5",
+      "name": "Alan Marsh",
+      "email": "alan.marsh@example.org",
+      "age": 46,
+      "createdAt": "2022-03-27T17:00:22.105Z",
+      "tags": [
+        "ut laboris",
+        "qui adipiscing",
+        "quos adipiscing",
+        "eos esse",
+        "quas nostrud",
+        "nostrud proident",
+        "rem sunt",
+        "ad duis",
+        "dolores vero",
+        "do officia"
+      ],
+      "posts": [
+        {
+          "title": "Accusamus Accusamus Culpa",
+          "author": {
+            "name": "Lena Novak"
+          }
+        },
+        {
+          "title": "Magna Provident Cillum Odio Ea",
+          "author": {
+            "name": "Julia Kim"
+          }
+        }
+      ],
+      "postCount": 5
+    }
+  ],
+  "kind": "list",
+  "field": {
+    "name": "users",
+    "parentType": "Query",
+    "path": "users",
+    "type": "User",
+    "list": true,
+    "nullable": false
+  },
+  "entity": {
+    "identity": "Query",
+    "type": "Query",
+    "key": "Query",
+    "shared": true,
+    "how": [],
+    "note": "a field of the query root"
+  },
+  "collection": {
+    "size": 5,
+    "window": {
+      "start": 1,
+      "total": null,
+      "endless": true
+    },
+    "countKey": "gh1\u001fs\u001fl\u001fQuery\u001fQuery\u001fusers",
+    "members": "shared (drawn from the pool of the type)"
+  },
+  "seed": {
+    "value": "s",
+    "source": "option"
+  },
+  "rule": {
+    "id": "N3",
+    "source": "heuristic",
+    "description": "type name from the singularised, PascalCased field name"
+  },
+  "listRule": {
+    "id": "L2",
+    "source": "heuristic",
+    "description": "a paging argument (first, last, limit, offset, skip, take, page, after) makes the field a list",
+    "isList": true
+  },
+  "decisions": [
+    {
+      "kind": "list",
+      "value": true,
+      "source": "heuristic",
+      "rule": "L2"
+    },
+    {
+      "kind": "type",
+      "value": "User",
+      "source": "heuristic",
+      "rule": "N3"
+    },
+    {
+      "kind": "arg",
+      "value": "first: Int",
+      "source": "heuristic"
+    }
+  ],
+  "precedence": [
+    {
+      "property": "list",
+      "winner": "heuristic",
+      "candidates": [
+        {
+          "source": "heuristic",
+          "rule": "L2",
+          "value": true,
+          "description": "a paging argument (first, last, limit, offset, skip, take, page, after) makes the field a list",
+          "wins": true
+        }
+      ]
+    }
+  ],
+  "summary": "users is a list of User, 5 items."
+}
